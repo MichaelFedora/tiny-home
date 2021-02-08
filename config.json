@@ -1,0 +1,18 @@
+{
+  "ip": "0.0.0.0",
+  "port": 6565,
+  "serverName": "http://localhost:6565",
+
+  "sessionExpTime": 604800000,
+  "handshakeExpTime": 300000,
+
+  "dbName": "tiny-home-db",
+
+  "dbs": {
+    "level": "http://localhost:6464"
+  },
+
+  "stores": {
+    "disk": "http://localhost:6363"
+  }
+}

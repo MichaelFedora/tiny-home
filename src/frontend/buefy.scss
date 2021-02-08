@@ -1,0 +1,100 @@
+// Import Bulma's core
+@import "~bulma/sass/utilities/_all";
+
+$primary: hsl(256, 60%, 59%);
+$primary-invert: findColorInvert($primary);
+
+$link: $primary;
+$link-visited: hsl(256, 42%, 42%);
+$link-hover-border: $primary;
+
+$link-hover: $grey-lighter;
+$link-focus: $grey;
+$link-focus: $white-bis;
+$link-active: $white-bis;
+$link-active-border: $grey-light;
+
+$scheme-main: $grey-darker;
+$scheme-main-bis: $grey-dark;
+$scheme-main-ter: $grey;
+
+$scheme-invert: hsl(256, 60%, 59%);
+$scheme-invert-bis: hsl(256, 42%, 42%);
+$scheme-invert-ter: hsl(257, 34%, 38%);
+
+$background: $grey-dark;
+
+$border: $grey-dark;
+$border-hover: $grey;
+
+$border-light: $grey-darker;
+$border-light-hover: $black-ter;
+
+$text: $white-bis;
+$text-light: $grey-light;
+$text-strong: $white;
+
+
+// Import Bulma and Buefy styles
+@import "~bulma";
+@import "~buefy/src/scss/buefy";
+
+button, a {
+  &:hover {
+    &.hover-primary { color: $primary; }
+    &.hover-success { color: $success; }
+    &.hover-warning { color: $warning; }
+    &.hover-danger { color: $danger; }
+    &.hover-info { color: $info; }
+  }
+}
+
+.content h1 {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.33);
+  padding-bottom: 0.25em;
+  margin-bottom: 0.25em;
+}
+
+.modal-background {
+  background-color: rgba($black-ter, 0.86);
+}
+
+.tabs li.disabled a {
+  cursor: not-allowed;
+  color: rgba(74, 74, 74, 0.5);
+  &:hover {
+    color: rgba(74, 74, 74, 0.5);
+    border-bottom-color: #dbdbdb;
+    border-bottom-style: solid;
+    border-bottom-width: 1px;
+  }
+}
+
+.modal-card-foot {
+  justify-content: flex-end;
+}
+
+.select select option {
+  color: $text;
+}
+
+.control.has-icons-left .icon,
+.control.has-icons.right .icon {
+  color: $text;
+}
+
+.dropdown.is-mobile-modal > .dropdown-menu {
+  box-shadow: 0 0 2px 1px rgba(121, 88, 213, 0.5);
+  background: #363636;
+  border-radius: 4px;
+  margin-top: 0.33em;
+}
+
+.dropdown-content {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.dropdown .background {
+  display: none;
+}
