@@ -1,15 +1,10 @@
-export interface Session {
-  id?: string;
-  user?: string;
-  app?: string;
-  readonly created: number;
-}
+import { Session } from 'tiny-host-common';
 
-export interface User {
+export interface AppSession extends Session {
   id?: string;
-  readonly username: string;
-  pass: string;
-  salt: string;
+  app: string;
+  scopes: string[];
+  readonly created: number;
 }
 
 export interface App {
@@ -38,16 +33,6 @@ export interface Handshake {
 }
 
 export interface Config {
-  readonly ip: string;
-  readonly port: number;
-  readonly serverName: string;
-
-  readonly sessionExpTime: number;
   readonly handshakeExpTime: number;
-  readonly whitelist?: string[];
-
-  readonly dbName: string;
-
-  readonly dbs: { [name: string]: string };
-  readonly stores: { [name: string]: string };
+  readonly serverOrigin: string;
 }

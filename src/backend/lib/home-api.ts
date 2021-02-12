@@ -1,125 +1,43 @@
 import { randomBytes } from 'crypto';
-import { json, Router, static as serveStatic } from 'express';
-import * as path from 'path';
+import { json, Request, Response, NextFunction, Router } from 'express';
 
-import { AuthError, MalformedError, NotAllowedError, NotFoundError } from './errors';
-import { Config, Handshake, User } from './types';
-import { handleError, handleValidationError, validateSession, wrapAsync } from './middleware';
+import { wrapAsync, handleError, MalformedError, NotFoundError, User } from 'tiny-host-common';
+
+import { Handshake, Config } from './types';
 import { hash } from './util';
+import { validateAppSession } from './middleware';
+import { HomeDB } from './home-db';
 
-import db from './db';
-import axios from 'axios';
-
-class Api {
+export class HomeApi {
 
   private _router: Router;
   public get router() { return this._router; }
 
-  constructor() { }
+  constructor(config: Config & {
+      stores: readonly { name: string, url: string }[],
+      dbs: readonly { name: string, url: string }[]
+    },
+    db: HomeDB,
+    getUser: (id: string) => Promise<User>,
+    getToken: (type: 'store' | 'db', url: string, user: User, scopes: readonly string[]) => Promise<string>,
+    userSessionValidator: (req: Request, res: Response, next: NextFunction) => void,
+    router = Router(),
+    errorHandler = handleError) {
 
-  init(config: Config) {
-
-    this._router = Router();
-
-    // auth
+    this._router = router;
+    const validateSession = validateAppSession(db);
 
     const authRouter = Router();
 
-    authRouter.post('/login', json(), wrapAsync(async (req, res) => {
-      if(config.whitelist && !config.whitelist.includes(req.body.username))
-        throw new AuthError('Whitelist is active.');
+    authRouter.get('/refresh', validateSession, wrapAsync(async (req, res) => {
+      await db.delAppSession(req.appsession.id);
+      res.json(await db.addAppSession(req.appsession.app, req.appsession.user));
+    }));
 
-      const user = await db.getUserFromUsername(req.body.username);
-      if(!user)
-        throw new AuthError('Username / password mismatch.');
-
-      const pass = await hash(user.salt, req.body.password);
-      if(user.pass !== pass)
-        throw new AuthError('Username / password mismatch.');
-
-      res.send(await db.addSession(user.id));
-    }), handleValidationError);
-
-    authRouter.post('/register', json(), wrapAsync(async (req, res) => {
-      if(!req.body.username || !req.body.password)
-        throw new MalformedError('Must have a username and password!');
-
-      if(config.whitelist && !config.whitelist.includes(req.body.username))
-        throw new NotAllowedError('Whitelist is active.');
-
-      if(await db.getUserFromUsername(req.body.username))
-        throw new NotAllowedError('Username taken!');
-
-      const salt = randomBytes(128).toString('hex');
-      const user: User = {
-        username: req.body.username,
-        salt,
-        pass: await hash(salt, req.body.password)
-      };
-
-      await db.addUser(user);
-
-      await Promise.all(Object.entries(config.stores).map<Promise<void>>(([name, url]) => (async () => {
-        await axios.post(url + '/auth/register', { username: user.username, password: user.pass } ).then(res => String(res.data));
-      })().catch(e => console.error('Error registering for store "' + name + '": ' + e))));
-
-      await Promise.all(Object.entries(config.dbs).map<Promise<void>>(([name, url]) => (async () => {
-        await axios.post(url + '/auth/register', { username: user.username, password: user.pass } );
-      })().catch(e => console.error('Error regsitering for db "' + name + '": ' + e))));
-
+    authRouter.post('/logout', validateSession, wrapAsync(async (req, res) => {
+      await db.delAppSession(req.appsession.id);
       res.sendStatus(204);
     }));
-
-    authRouter.post('/change-pass', validateSession(), json(), wrapAsync(async (req, res) => {
-      if(!req.user)
-        throw new NotAllowedError('Only users can change passwords.');
-
-      if(!req.body.password || !req.body.newpass)
-        throw new MalformedError('Body must have a password, and a newpass.');
-
-      if(await hash(req.user.salt, req.body.password) !== req.user.pass)
-        throw new NotAllowedError('Password mismatch.');
-
-      const salt = randomBytes(128).toString('hex');
-      const pass = hash(salt, req.body.newpass);
-
-      await db.putUser(req.user.id, Object.assign(req.user, { salt, pass }));
-      const sessions = await db.getSessionsForUser(req.user.id);
-      await db.delManySessions(sessions.filter(a => a !== req.session.id));
-
-      await Promise.all(Object.entries(config.stores).map<Promise<void>>(([name, url]) => (async () => {
-        const token = await axios.post(url + '/auth/login', { username: req.user.username, password: req.user.pass } ).then(res => String(res.data));
-        await axios.post(url + '/auth/change-pass?sid=' + token, { password: req.user.pass, newpass: pass });
-        await axios.post(url + '/auth/logout?sid=' + token);
-      })().catch(e => console.error('Error changing store "' + name + '" password: ' + e))));
-
-      await Promise.all(Object.entries(config.dbs).map<Promise<void>>(([name, url]) => (async () => {
-        const token = await axios.post(url + '/auth/login', { username: req.user.username, password: req.user.pass } ).then(res => String(res.data));
-        await axios.post(url + '/auth/change-pass?sid=' + token, { password: req.user.pass, newpass: pass });
-        await axios.post(url + '/auth/logout?sid=' + token);
-      })().catch(e => console.error('Error changing db "' + name + '" password: ' + e))));
-
-      res.sendStatus(204);
-    }));
-
-    authRouter.post('/logout', validateSession(), wrapAsync(async (req, res) => {
-      await db.delSession(req.session.id);
-      res.sendStatus(204);
-    }));
-
-    authRouter.get('/refresh', validateSession(), wrapAsync(async (req, res) => {
-      let sess: string;
-
-      if(req.user)
-        sess = await db.addSession(req.user.id);
-      else if(req.authedApp)
-        sess = await db.addAppSession(req.authedApp.id)
-
-      await db.delSession(req.session.id);
-      res.json(sess);
-    }));
-
-    authRouter.get('/can-register', (_, res) => res.json(!Boolean(config.whitelist))); // ehhh
 
     authRouter.post('/token', json(), wrapAsync(async (req, res) => {
       if(!req.body.app || !req.body.redirect || !req.body.scopes || !req.body.code || !req.body.secret)
@@ -157,7 +75,7 @@ class Api {
         app = await db.getApp(await db.addApp(info));
       }
 
-      const user = await db.getUser(handshake.user);
+      const user = await getUser(handshake.user);
 
       const tokens: {
         home?: { url: string, token: string },
@@ -166,7 +84,7 @@ class Api {
       } = { };
 
       if(scopes.includes('home'))
-        tokens.home = { url: config.serverName, token: await db.addAppSession(app.id) };
+        tokens.home = { url: config.serverOrigin, token: await db.addAppSession(app.id, user.id) };
 
       if(scopes.includes('store')) {
         if(!app.store)
@@ -177,7 +95,7 @@ class Api {
           tokens.store = {
             type: 'local',
             url: app.store.url,
-            token: await axios.post(app.store.url + '/auth/login', { username: user.username, password: user.pass, scopes: app.fileScopes }).then(res => String(res.data))
+            token: await getToken('store', app.store.url, user, app.fileScopes)
           };
         }
       }
@@ -191,7 +109,7 @@ class Api {
           tokens.db = {
             type: 'local',
             url: app.db.url,
-            token: await axios.post(app.db.url + '/auth/login', { username: user.username, password: user.pass, scopes: ['appdata.' + app.app + '.' + app.secret] }).then(res => String(res.data))
+            token: await getToken('store', app.store.url, user, ['appdata.' + app.app + '.' + app.secret])
           };
         }
       }
@@ -234,7 +152,7 @@ class Api {
       res.redirect(`/handshake?handshake=${hsId}${req.query.username ? '&username=' + String(req.query.username) : ''}`);
     }))
 
-    handshakeRouter.use('/:id', validateSession(), wrapAsync(async (req, res, next) => {
+    handshakeRouter.use('/:id', userSessionValidator, wrapAsync(async (req, res, next) => {
       if(!req.user)
         throw new MalformedError('Can only access handshakes as a user!');
 
@@ -257,8 +175,8 @@ class Api {
         scopes: req.handshake.scopes,
         fileScopes: req.handshake.fileScopes || undefined,
 
-        stores: Object.entries(config.stores).map(([k, v]) => ({ name: k, url: v })),
-        dbs: Object.entries(config.dbs).map(([k, v]) => ({ name: k, url: v })),
+        stores: config.stores,
+        dbs: config.dbs,
       });
     }));
 
@@ -282,10 +200,10 @@ class Api {
             throw new MalformedError('A custom store must also have &storeUrl=.. and &storeToken=.. queries!');
           storeInfo = { type: 'custom', url: req.query.storeUrl, token: req.query.storeToken };
         } else {
-          const entry = Object.entries(config.stores).find(([k]) => k === storeType);
+          const entry = config.stores.find(({ name }) => name === storeType);
           if(!entry)
             throw new NotFoundError('Local store not found: ' + storeType);
-          storeInfo = { type: 'local', url: entry[1] };
+          storeInfo = { type: 'local', url: entry.url };
         }
       }
 
@@ -299,10 +217,10 @@ class Api {
 
             dbInfo = { type: 'custom', url: String(req.query.dbUrl), token: req.query.dbToken };
         } else {
-          const entry = Object.entries(config.dbs).find(([k]) => k === dbType);
+          const entry = config.dbs.find(({ name }) => name === dbType);
           if(!entry)
             throw new NotFoundError('Local db not found: ' + dbType);
-          dbInfo = { type: 'local', url: entry[1] };
+          dbInfo = { type: 'local', url: entry.url };
         }
       }
 
@@ -324,31 +242,13 @@ class Api {
       res.redirect(req.handshake.redirect + '?code=' + code);
     }));
 
-    handshakeRouter.get('/:id/cancel', validateSession(), wrapAsync(async (req, res) => {
+    handshakeRouter.get('/:id/cancel', validateSession, wrapAsync(async (req, res) => {
       await db.delHandshake(req.handshake.id);
       res.redirect(req.handshake.redirect + '?error=access_denied');
     }));
 
-    authRouter.use('/handshake', handshakeRouter);
+    authRouter.use('/handshake', handshakeRouter, errorHandler('home-auth-handshake'));
 
-    this.router.use('/auth', authRouter, handleError('auth'));
-
-    this.router.delete('/self', validateSession(), wrapAsync(async (req, res) => {
-      if(req.user) {
-        await db.delUser(req.user.id);
-        const apps = await db.getAppsForUser(req.user.id);
-        await db.delManyApps(apps.map(a => a.id));
-      } else if(req.authedApp) {
-        await db.delApp(req.authedApp.id);
-      }
-      res.sendStatus(204);
-    }));
-
-    this.router.use(serveStatic(path.resolve(__dirname, '../frontend')));
-    this.router.get('*', (_, res) => res.sendFile(path.resolve(__dirname, '../frontend/index.html')));
-
-    this.router.use(handleError('api'));
+    router.use('/auth', authRouter, errorHandler('home-auth'));
   }
 }
-
-export default new Api();
