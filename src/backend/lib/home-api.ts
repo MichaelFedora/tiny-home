@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto';
 import { json, Request, Response, NextFunction, Router } from 'express';
 
-import { wrapAsync, handleError, MalformedError, NotFoundError, User } from 'tiny-host-common';
+import { wrapAsync, handleError, MalformedError, NotFoundError, User, AuthDB, NotAllowedError } from 'tiny-host-common';
 
 import { Handshake, Config } from './types';
 import { hash } from './util';
@@ -19,22 +19,29 @@ export class HomeApi {
     },
     db: HomeDB,
     getUser: (id: string) => Promise<User>,
-    getToken: (type: 'store' | 'db', url: string, user: User, scopes: readonly string[]) => Promise<string>,
+    getToken: (type: 'store' | 'db', url: string, user: User, scopes: readonly string[], appToken: string) => Promise<string>,
     userSessionValidator: (req: Request, res: Response, next: NextFunction) => void,
     router = Router(),
     errorHandler = handleError) {
 
     this._router = router;
-    const validateSession = validateAppSession(db);
+    const authApp = validateAppSession(db, getUser);
+    const optAuthApp = validateAppSession(db, getUser, true);
 
     const authRouter = Router();
 
-    authRouter.get('/refresh', validateSession, wrapAsync(async (req, res) => {
+    authRouter.get('/refresh', optAuthApp, wrapAsync(async (req, res, next) => {
+      if(!req.appsession)
+        return next();
+
       await db.delAppSession(req.appsession.id);
       res.json(await db.addAppSession(req.appsession.app, req.appsession.user));
     }));
 
-    authRouter.post('/logout', validateSession, wrapAsync(async (req, res) => {
+    authRouter.post('/logout', optAuthApp, wrapAsync(async (req, res, next) => {
+      if(!req.appsession)
+        return next();
+
       await db.delAppSession(req.appsession.id);
       res.sendStatus(204);
     }));
@@ -61,16 +68,13 @@ export class HomeApi {
           secret,
           user: handshake.user,
           store: null,
-          db: null,
-          fileScopes: ['/appdata/' + handshake.app + '/' + secret]
+          db: null
         };
 
         if(handshake.store)
           info.store = handshake.store;
         if(handshake.db)
           info.db = handshake.db;
-        if(handshake.fileScopes)
-          info.fileScopes = handshake.fileScopes.slice();
 
         app = await db.getApp(await db.addApp(info));
       }
@@ -83,8 +87,13 @@ export class HomeApi {
         db?: { type: string, url: string, token: string }
       } = { };
 
+      const token = await db.addAppSession(app.id, user.id, {
+        fileScopes: scopes.includes('store') ? handshake.fileScopes || ['/appdata/' + handshake.app + '/' + secret] : [],
+        dbScopes: scopes.includes('db') ? handshake.dbScopes || ['appdata.' + app.app + '.' + app.secret] : []
+      });
+
       if(scopes.includes('home'))
-        tokens.home = { url: config.serverOrigin, token: await db.addAppSession(app.id, user.id) };
+        tokens.home = { url: config.serverOrigin, token };
 
       if(scopes.includes('store')) {
         if(!app.store)
@@ -95,7 +104,7 @@ export class HomeApi {
           tokens.store = {
             type: 'local',
             url: app.store.url,
-            token: await getToken('store', app.store.url, user, app.fileScopes)
+            token: await getToken('store', app.store.url, user, handshake.fileScopes, token)
           };
         }
       }
@@ -109,7 +118,7 @@ export class HomeApi {
           tokens.db = {
             type: 'local',
             url: app.db.url,
-            token: await getToken('store', app.store.url, user, ['appdata.' + app.app + '.' + app.secret])
+            token: await getToken('db', app.store.url, user, handshake.dbScopes, token)
           };
         }
       }
@@ -135,6 +144,7 @@ export class HomeApi {
         redirect: req.query.redirect,
         scopes: req.query.scopes.split(',').filter(a => validScopes.includes(a)).join(','),
         fileScopes: null as string[],
+        dbScopes: null as string[],
         created: Date.now()
       }
 
@@ -242,7 +252,7 @@ export class HomeApi {
       res.redirect(req.handshake.redirect + '?code=' + code);
     }));
 
-    handshakeRouter.get('/:id/cancel', validateSession, wrapAsync(async (req, res) => {
+    handshakeRouter.get('/:id/cancel', authApp, wrapAsync(async (req, res) => {
       await db.delHandshake(req.handshake.id);
       res.redirect(req.handshake.redirect + '?error=access_denied');
     }));
@@ -250,5 +260,19 @@ export class HomeApi {
     authRouter.use('/handshake', handshakeRouter, errorHandler('home-auth-handshake'));
 
     router.use('/auth', authRouter, errorHandler('home-auth'));
+
+    router.get('/self', optAuthApp, wrapAsync(async (req, res, next) => {
+      if(!req.appsession)
+        return next();
+      res.json({ id: req.user.id, username: req.user.username });
+    }), handleError('home-get-self'));
+
+    router.delete('/self', optAuthApp, wrapAsync(async (req, res, next) => {
+      if(!req.appsession)
+        return next();
+
+      await db.delApp(req.authedApp.app);
+      res.sendStatus(204);
+    }), handleError('home-delete-self'));
   }
 }

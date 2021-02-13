@@ -1,10 +1,9 @@
 import { Session } from 'tiny-host-common';
 
 export interface AppSession extends Session {
-  id?: string;
   app: string;
-  scopes: string[];
-  readonly created: number;
+  dbScopes: readonly string[];
+  fileScopes: readonly string[];
 }
 
 export interface App {
@@ -12,9 +11,8 @@ export interface App {
   readonly app: string;
   readonly secret: string; // hashed with app
   readonly user: string;
-  readonly store: { type: 'local', url: string } | { type: 'custom', url: string, token: string }
-  readonly db: { type: 'local', url: string } | { type: 'custom', url: string, token: string }
-  readonly fileScopes: readonly string[];
+  readonly store: { type: 'local', url: string } | { type: 'custom', url: string, token: string };
+  readonly db: { type: 'local', url: string } | { type: 'custom', url: string, token: string };
 }
 
 export interface Handshake {
@@ -22,12 +20,13 @@ export interface Handshake {
 
   code?: string;
   user?: string;
-  store?: { type: 'local', url: string } | { type: 'custom', url: string, token: string }
-  db?: { type: 'local', url: string } | { type: 'custom', url: string, token: string }
+  store?: { type: 'local', url: string } | { type: 'custom', url: string, token: string };
+  db?: { type: 'local', url: string } | { type: 'custom', url: string, token: string };
 
   readonly app: string; // id
   readonly redirect: string;
   readonly scopes: string;
+  readonly dbScopes?: readonly string[];
   readonly fileScopes?: readonly string[];
   readonly created: number;
 }

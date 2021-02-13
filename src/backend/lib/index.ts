@@ -16,7 +16,7 @@ declare module 'express-serve-static-core' {
 
 import { HomeApi } from './home-api';
 import { HomeDB } from './home-db';
-import { validateAppSession } from './middleware';
+import { validateAppSession, validateUserOrAppSession } from './middleware';
 import { App, Handshake, Config as HomeConfig } from './types';
 
 export {
@@ -25,5 +25,6 @@ export {
   App,
   Handshake,
   HomeConfig,
-  validateAppSession
+  validateAppSession,
+  validateUserOrAppSession
 }

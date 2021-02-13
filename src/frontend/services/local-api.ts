@@ -26,10 +26,6 @@ class LocalApi {
       dataBus.clear();
     },
 
-    async canRegister(): Promise<boolean> {
-      return axios.get(`${url}/auth/can-register`).then(res => Boolean(res.data), e => { handleError(e); return false; });
-    },
-
     async getHandshakeInfo(handshake: string): Promise<{ app: string; scopes: string; fileScopes?: string[]; stores: { name: string, url: string }[]; dbs: { name: string, url: string }[] }> {
       return axios.get(`${url}/auth/handshake/${handshake}?sid=${dataBus.session}`).then(res => res.data, handleError);
     },

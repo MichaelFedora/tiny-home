@@ -1,15 +1,15 @@
 import { Router, static as serveStatic } from 'express';
 import * as path from 'path';
+import axios from 'axios';
 
 import { AuthApi, handleError, validateUserSession } from 'tiny-host-common';
 import { StoreApi } from 'tiny-disk-host';
 import { DataApi } from 'tiny-level-host';
-import { HomeApi } from '../lib';
+import { HomeApi, validateUserOrAppSession } from '../lib';
 
 import { Config } from './types';
 
 import db from './db';
-import { validateUserOrAppSession } from '../lib/middleware';
 
 class Api {
 
@@ -19,14 +19,15 @@ class Api {
   private _authApi: AuthApi;
   public get authApi() { return this._authApi; }
 
-  private _storeApi: StoreApi;
-  public get storeApi() { return this._storeApi; }
-
-  private _dataApi: DataApi;
-  public get dataApi() { return this._dataApi; }
-
   private _homeApi: HomeApi;
   public get homeApi() { return this._homeApi; }
+
+  private _storeApi?: StoreApi;
+  public get storeApi() { return this._storeApi; }
+
+  private _dataApi?: DataApi;
+  public get dataApi() { return this._dataApi; }
+
 
   constructor() { }
 
@@ -34,24 +35,29 @@ class Api {
 
     this._router = Router();
 
+    const getUser = (id: string) => db.auth.getUser(id);
     const userSessionValidator = validateUserSession(db.auth);
-    const sessionValidator = validateUserOrAppSession(db.home, db.auth);
 
-    this._authApi = new AuthApi(config, db.auth);
-    this.router.use('/user', this.authApi.router);
-    this._storeApi = new StoreApi(config, db.store, sessionValidator, this.router);
-    this._dataApi = new DataApi(db.data, sessionValidator, this.router);
+    // takes place of auth api
     this._homeApi = new HomeApi(Object.assign({ }, config, {
-      dbs: [{ name: 'local', url: config.serverName }],
-      stores: [{ name: 'local', url: config.serverName }]
-    }), db.home, id => db.auth.getUser(id), (type, url, user, scopes) => {
-      return null;
-    }, userSessionValidator);
+      dbs: [{ name: 'local', url: config.serverOrigin }],
+      stores: [{ name: 'local', url: config.serverOrigin }]
+    }), db.home, getUser, async (type, url, user, scopes, token) => {
+      return config.big ? token : await axios.post(`${url}/auth/login`, { username: user.username, password: user.pass, scopes }).then(res => String(res.data));
+    }, userSessionValidator, this.router);
+    this._authApi = new AuthApi({ requireScopes: false, whitelist: config.whitelist }, db.auth, this.router);
 
-    this.router.use('/app', this.homeApi.router);
+    if(config.big) {
+      const getSession = (sid: string) => db.auth.getSession(sid);
+      const storeSessionValidator = validateUserOrAppSession(db.home, getUser, getSession, 'file');
+      const dbSessionValidator = validateUserOrAppSession(db.home, getUser, getSession, 'db');
 
-    this.router.use(serveStatic(path.resolve(__dirname, '../frontend')));
-    this.router.get('*', (_, res) => res.sendFile(path.resolve(__dirname, '../frontend/index.html')));
+      this._storeApi = new StoreApi(config, db.store, storeSessionValidator, this.router);
+      this._dataApi = new DataApi(db.data, dbSessionValidator, this.router);
+    }
+
+    this.router.use(serveStatic(path.resolve(__dirname, '../../frontend')));
+    this.router.get('*', (_, res) => res.sendFile(path.resolve(__dirname, '../../frontend/index.html')));
 
     this.router.use(handleError('api'));
   }

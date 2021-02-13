@@ -25,7 +25,6 @@ export default Vue.component('tiny-login', {
     valid(): boolean { return this.username && this.password && /\w{4,}/.test(this.password) && (!this.registering || this.confirmpass === this.password); }
   },
   mounted() {
-    localApi.auth.canRegister().then(res => this.canRegister = res);
     if(this.$route.query.username)
       this.username = '' + this.$route.query.username;
   },

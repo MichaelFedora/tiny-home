@@ -28,12 +28,22 @@ export class HomeDB {
 
   // app sessions
 
-  async addAppSession(app: string, user: string): Promise<string> {
+  async addAppSession(app: string, user: string, scopes?: Partial<{ dbScopes: readonly string[], fileScopes: readonly string[] }>): Promise<string> {
     let id: string;
     do {
       id = v4();
     } while(await this.getAppSession(id) != null && !await this.checkSessionCollision(id));
-    await this.db.put(this.scope + 'appsession!!' + id, { app, user, created: Date.now() });
+
+    const session: AppSession = {
+      app,
+      user,
+      created: Date.now(),
+      scopes: [],
+      dbScopes: scopes?.dbScopes || [],
+      fileScopes: scopes?.fileScopes || []
+    };
+
+    await this.db.put(this.scope + 'appsession!!' + id, session);
     return id;
   }
 

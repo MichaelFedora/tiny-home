@@ -1,14 +1,18 @@
 import { Request, Response, NextFunction } from 'express';
-import { AuthError, User, wrapAsync, handleValidationError, AuthDB } from 'tiny-host-common';
+import { AuthError, User, wrapAsync, handleValidationError, Session } from 'tiny-host-common';
 
 import { HomeDB } from './home-db';
 
-export function validateAppSession(homeDB: HomeDB, getUser?: (id: string) => Promise<User>) {
+export function validateAppSession(homeDB: HomeDB, getUser?: (id: string) => Promise<User>, pass = false) {
   return wrapAsync(async function(req: Request, res: Response, next: NextFunction) {
     try {
       const appsession = await homeDB.getAppSession(String(req.query.sid || '') || '');
-      if(!appsession)
-        throw new AuthError('No app-session found!');
+      if(!appsession) {
+        if(!pass)
+          throw new AuthError('No app-session found!');
+        else
+          return next();
+      }
 
       req.appsession = appsession;
 
@@ -33,19 +37,19 @@ export function validateAppSession(homeDB: HomeDB, getUser?: (id: string) => Pro
   });
 }
 
-export function validateUserOrAppSession(homeDB: HomeDB, authDB: AuthDB) {
+export function validateUserOrAppSession(homeDB: HomeDB, getUser: (id: string) => Promise<User>, getSession: (sid: string) => Promise<Session>, scope?: 'file' | 'db') {
   return wrapAsync(async function(req: Request, res: Response, next: NextFunction) {
     try {
       const appsession = await homeDB.getAppSession(String(req.query.sid || '') || '');
 
       if(!appsession) {
-        const session = await authDB.getSession(String(req.query.sid || '') || '');
+        const session = await getSession(String(req.query.sid || '') || '');
         if(!session)
           throw new AuthError('No session found!');
 
         req.session = session;
 
-        const user = await authDB.getUser(session.user);
+        const user = await getUser(session.user);
         if(!user)
           throw new AuthError('No user found!');
 
@@ -61,7 +65,12 @@ export function validateUserOrAppSession(homeDB: HomeDB, authDB: AuthDB) {
 
         req.authedApp = app;
 
-        const user = await authDB.getUser(appsession.user);
+        if(scope === 'file')
+          req.session.scopes = appsession.fileScopes;
+        else if(scope === 'db')
+          req.session.scopes = appsession.dbScopes;
+
+        const user = await getUser(appsession.user);
         if(!user)
           throw new AuthError('No user found!');
 
