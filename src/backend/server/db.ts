@@ -2,8 +2,8 @@ import * as level from 'level';
 import { LevelUp } from 'levelup';
 
 import { AuthDB } from 'tiny-host-common';
-import { StoreDB } from 'tiny-disk-host';
-import { DataDB } from 'tiny-level-host';
+import { DiskDB } from 'tiny-disk-host';
+import { LevelDB } from 'tiny-level-host';
 import { HomeDB } from '../lib';
 
 import { Config } from './types';
@@ -19,11 +19,11 @@ class DB {
   private _home: HomeDB;
   public get home() { return this._home; }
 
-  private _store?: StoreDB;
-  public get store() { return this._store; }
+  private _disk?: DiskDB;
+  public get disk() { return this._disk; }
 
-  private _data?: DataDB;
-  public get data() { return this._data; }
+  private _level?: LevelDB;
+  public get level() { return this._level; }
 
   constructor() { }
 
@@ -36,8 +36,8 @@ class DB {
 
     if(config.big) {
       const getUserFromUsername = (username: string) => this._auth.getUserFromUsername(username);
-      this._store = new StoreDB(this._db, getUserFromUsername);
-      this._data = new DataDB(this._db, getUserFromUsername);
+      this._disk = new DiskDB(this._db, getUserFromUsername);
+      this._level = new LevelDB(this._db, getUserFromUsername);
     }
   }
 

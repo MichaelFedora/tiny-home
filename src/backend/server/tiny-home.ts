@@ -24,8 +24,8 @@ try {
   db.init(config);
   db.auth.onUserDelete.subscribe(async user => {
     try {
-      await db.store.delFileInfoRecurse('/' + user.id);
-      await db.data.delAllUserData(user.id);
+      await db.disk.delFileInfoRecurse('/' + user.id);
+      await db.level.delAllUserData(user.id);
       await db.home.delManyApps(await db.home.getAppsForUser(user.id).then(apps => apps.map(a => a.id)));
       await fs.promises.rm(path.join(config.storageRoot, user.id), { force: true, recursive: true });
     } catch(e) {

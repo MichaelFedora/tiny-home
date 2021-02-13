@@ -3,8 +3,8 @@ import * as path from 'path';
 import axios from 'axios';
 
 import { AuthApi, handleError, validateUserSession } from 'tiny-host-common';
-import { StoreApi } from 'tiny-disk-host';
-import { DataApi } from 'tiny-level-host';
+import { DiskApi } from 'tiny-disk-host';
+import { LevelApi } from 'tiny-level-host';
 import { HomeApi, validateUserOrAppSession } from '../lib';
 
 import { Config } from './types';
@@ -22,11 +22,11 @@ class Api {
   private _homeApi: HomeApi;
   public get homeApi() { return this._homeApi; }
 
-  private _storeApi?: StoreApi;
-  public get storeApi() { return this._storeApi; }
+  private _diskApi?: DiskApi;
+  public get diskApi() { return this._diskApi; }
 
-  private _dataApi?: DataApi;
-  public get dataApi() { return this._dataApi; }
+  private _levelApi?: LevelApi;
+  public get levelApi() { return this._levelApi; }
 
 
   constructor() { }
@@ -52,8 +52,8 @@ class Api {
       const storeSessionValidator = validateUserOrAppSession(db.home, getUser, getSession, 'file');
       const dbSessionValidator = validateUserOrAppSession(db.home, getUser, getSession, 'db');
 
-      this._storeApi = new StoreApi(config, db.store, storeSessionValidator, this.router);
-      this._dataApi = new DataApi(db.data, dbSessionValidator, this.router);
+      this._diskApi = new DiskApi(config, db.disk, storeSessionValidator, this.router);
+      this._levelApi = new LevelApi(db.level, dbSessionValidator, this.router);
     }
 
     this.router.use(serveStatic(path.resolve(__dirname, '../../frontend')));
