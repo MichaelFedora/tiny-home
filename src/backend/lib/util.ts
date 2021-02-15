@@ -1,1 +1,1 @@
-export { hash } from 'tiny-host-common/lib/util';
+export { hash } from 'tiny-host-common/lib/auth/auth-util';

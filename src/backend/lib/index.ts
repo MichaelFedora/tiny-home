@@ -1,8 +1,9 @@
+
 declare module 'express' {
   interface Request {
     appsession?: import('./types').AppSession;
     authedApp?: import('./types').App;
-    handshake?: import('./types').Handshake;
+    apphandshake?: import('./types').Handshake;
   }
 }
 
@@ -10,7 +11,7 @@ declare module 'express-serve-static-core' {
   interface Request {
     appsession?: import('./types').AppSession;
     authedApp?: import('./types').App;
-    handshake?: import('./types').Handshake;
+    apphandshake?: import('./types').Handshake;
   }
 }
 

@@ -45,7 +45,13 @@ class Api {
     }), db.home, getUser, async (type, url, user, scopes, token) => {
       return config.big ? token : await axios.post(`${url}/auth/login`, { username: user.username, password: user.pass, scopes }).then(res => String(res.data));
     }, userSessionValidator, this.router);
-    this._authApi = new AuthApi({ requireScopes: false, whitelist: config.whitelist }, db.auth, this.router);
+    this._authApi = new AuthApi({
+      whitelist: config.whitelist,
+      handshakeExpTime: 0,
+      requireScopes: false,
+      allowHandshakes: false,
+      allowMasterKeys: false
+    }, db.auth, this.router);
 
     if(config.big) {
       const getSession = (sid: string) => db.auth.getSession(sid);

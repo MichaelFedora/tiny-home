@@ -179,41 +179,41 @@ export class HomeDB {
 
   // handshakes
 
-  async addHandshake(hs: Handshake): Promise<string> {
+  async addAppHandshake(hs: Handshake): Promise<string> {
     delete hs.id;
 
     let id: string;
     do {
       id = v4();
-    } while(await this.getHandshake(id) != null);
+    } while(await this.getAppHandshake(id) != null);
 
     delete hs.code;
     delete hs.user;
 
-    await this.db.put(this.scope + 'handshake!!' + id, hs);
+    await this.db.put(this.scope + 'apphandshake!!' + id, hs);
     return id;
   }
 
-  async putHandshake(id: string, hs: Handshake): Promise<void> {
+  async putAppHandshake(id: string, hs: Handshake): Promise<void> {
     delete hs.id;
 
-    await this.db.put(this.scope + 'handshake!!' + id, hs);
+    await this.db.put(this.scope + 'apphandshake!!' + id, hs);
   }
 
-  async getHandshake(id: string): Promise<Handshake> {
-    const u = await this.safeGet(this.scope + 'handshake!!' + id);
+  async getAppHandshake(id: string): Promise<Handshake> {
+    const u = await this.safeGet(this.scope + 'apphandshake!!' + id);
     if(u) u.id = id;
     return u;
   }
 
-  async delHandshake(id: string): Promise<void> {
-    return await this.db.del(this.scope + 'handshake!!' + id);
+  async delAppHandshake(id: string): Promise<void> {
+    return await this.db.del(this.scope + 'apphandshake!!' + id);
   }
 
-  async getHandshakeFromCode(code: string): Promise<Handshake> {
+  async getAppHandshakeFromCode(code: string): Promise<Handshake> {
     let destroyed = false;
-    const start = this.scope + 'handshake!!';
-    const end = this.scope + 'handshake!"'
+    const start = this.scope + 'apphandshake!!';
+    const end = this.scope + 'apphandshake!"'
     return await new Promise<Handshake>(res => {
       const stream = this.db.createValueStream({ gt: start, lt: end });
       stream.on('data', (value: Handshake) => {
@@ -226,10 +226,10 @@ export class HomeDB {
     });
   }
 
-  async cleanHandshakes(): Promise<void> {
+  async cleanAppHandshakes(): Promise<void> {
     const handshakes: string[] = [];
-    const start = this.scope + 'handshake!!';
-    const end = this.scope + 'handshake!"'
+    const start = this.scope + 'apphandshake!!';
+    const end = this.scope + 'apphandshake!"'
     await new Promise<void>(res => {
       const stream = this.db.createReadStream({ gt: start, lt: end });
       stream.on('data', ({ key, value }: { key: string, value: Handshake }) => {

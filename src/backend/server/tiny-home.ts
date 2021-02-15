@@ -40,6 +40,8 @@ try {
 async function cleanSessions() {
   try {
     await db.auth.cleanSessions();
+    await db.home.cleanAppSessions();
+    await db.home.cleanAppHandshakes();
     setTimeout(cleanSessions, 10 * 60 * 1000);
   } catch(e) {
     console.error(`Error cleaning sessions: ${e.stack || e}`);

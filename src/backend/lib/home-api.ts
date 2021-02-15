@@ -25,6 +25,9 @@ export class HomeApi {
     errorHandler = handleError) {
 
     this._router = router;
+
+    router.get('/info', (_, res) => res.json({ type: 'home' }));
+
     const authApp = validateAppSession(db, getUser);
     const optAuthApp = validateAppSession(db, getUser, true);
 
@@ -50,11 +53,11 @@ export class HomeApi {
       if(!req.body.app || !req.body.redirect || !req.body.scopes || !req.body.code || !req.body.secret)
         throw new MalformedError('Body should contain: { app, redirect, scopes, code, secret }!');
 
-      const handshake = await db.getHandshakeFromCode(req.body.code);
+      const handshake = await db.getAppHandshakeFromCode(req.body.code);
       if(!handshake)
         throw new NotFoundError('Handshake not found with given code!');
 
-      await db.delHandshake(handshake.id);
+      await db.delAppHandshake(handshake.id);
       if(handshake.app !== req.body.app || handshake.redirect !== req.body.redirect || handshake.scopes !== req.body.scopes)
         throw new MalformedError('Handshake/body mismatch.');
 
@@ -157,7 +160,7 @@ export class HomeApi {
       } else
         delete info.fileScopes;
 
-      const hsId = await db.addHandshake(info);
+      const hsId = await db.addAppHandshake(info);
 
       res.redirect(`/handshake?handshake=${hsId}${req.query.username ? '&username=' + String(req.query.username) : ''}`);
     }))
@@ -166,13 +169,13 @@ export class HomeApi {
       if(!req.user)
         throw new MalformedError('Can only access handshakes as a user!');
 
-      req.handshake = await db.getHandshake(req.params.id);
-      if(!req.handshake)
+      req.apphandshake = await db.getAppHandshake(req.params.id);
+      if(!req.apphandshake)
         throw new NotFoundError('No handshake found with id "' + req.params.id + '"!');
 
 
-      if(req.handshake.created + config.handshakeExpTime < Date.now()) {
-        await db.delHandshake(req.handshake.id);
+      if(req.apphandshake.created + config.handshakeExpTime < Date.now()) {
+        await db.delAppHandshake(req.apphandshake.id);
         throw new NotFoundError('Handshake expired!');
       }
 
@@ -181,9 +184,9 @@ export class HomeApi {
 
     handshakeRouter.get('/:id', wrapAsync(async (req, res) => {
       res.json({
-        app: req.handshake.app,
-        scopes: req.handshake.scopes,
-        fileScopes: req.handshake.fileScopes || undefined,
+        app: req.apphandshake.app,
+        scopes: req.apphandshake.scopes,
+        fileScopes: req.apphandshake.fileScopes || undefined,
 
         stores: config.stores,
         dbs: config.dbs,
@@ -192,7 +195,7 @@ export class HomeApi {
 
     handshakeRouter.get('/:id/approve', wrapAsync(async (req, res) => {
 
-      const scopes = req.handshake.scopes.split(',');
+      const scopes = req.apphandshake.scopes.split(',');
       if(req.query.store ? typeof req.query.store !== 'string' : scopes.includes('store'))
         throw new MalformedError('Store scope is required (as string) but not provided by query!');
       if(req.query.db ? typeof req.query.db !== 'string' : scopes.includes('db'))
@@ -237,7 +240,7 @@ export class HomeApi {
       let code: string;
       do {
         code = randomBytes(24).toString('hex');
-      } while(await db.getHandshakeFromCode(code) != null);
+      } while(await db.getAppHandshakeFromCode(code) != null);
 
 
       const info = {
@@ -247,14 +250,14 @@ export class HomeApi {
         db: dbInfo
       };
 
-      await db.putHandshake(req.handshake.id, Object.assign(req.handshake, info));
+      await db.putAppHandshake(req.apphandshake.id, Object.assign(req.apphandshake, info));
 
-      res.redirect(req.handshake.redirect + '?code=' + code);
+      res.redirect(req.apphandshake.redirect + '?code=' + code);
     }));
 
-    handshakeRouter.get('/:id/cancel', authApp, wrapAsync(async (req, res) => {
-      await db.delHandshake(req.handshake.id);
-      res.redirect(req.handshake.redirect + '?error=access_denied');
+    handshakeRouter.get('/:id/cancel', wrapAsync(async (req, res) => {
+      await db.delAppHandshake(req.apphandshake.id);
+      res.redirect(req.apphandshake.redirect + '?error=access_denied');
     }));
 
     authRouter.use('/handshake', handshakeRouter, errorHandler('home-auth-handshake'));
