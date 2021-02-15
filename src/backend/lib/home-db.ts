@@ -1,7 +1,7 @@
 import { LevelUp } from 'levelup';
 import { v4 } from 'uuid';
 
-import { App, AppSession, Handshake } from './types';
+import { App, AppSession, AppHandshake, HomeMasterKey } from './types';
 import { hash } from './util';
 
 export class HomeDB {
@@ -179,7 +179,7 @@ export class HomeDB {
 
   // handshakes
 
-  async addAppHandshake(hs: Handshake): Promise<string> {
+  async addAppHandshake(hs: AppHandshake): Promise<string> {
     delete hs.id;
 
     let id: string;
@@ -194,13 +194,13 @@ export class HomeDB {
     return id;
   }
 
-  async putAppHandshake(id: string, hs: Handshake): Promise<void> {
+  async putAppHandshake(id: string, hs: AppHandshake): Promise<void> {
     delete hs.id;
 
     await this.db.put(this.scope + 'apphandshake!!' + id, hs);
   }
 
-  async getAppHandshake(id: string): Promise<Handshake> {
+  async getAppHandshake(id: string): Promise<AppHandshake> {
     const u = await this.safeGet(this.scope + 'apphandshake!!' + id);
     if(u) u.id = id;
     return u;
@@ -210,13 +210,13 @@ export class HomeDB {
     return await this.db.del(this.scope + 'apphandshake!!' + id);
   }
 
-  async getAppHandshakeFromCode(code: string): Promise<Handshake> {
+  async getAppHandshakeFromCode(code: string): Promise<AppHandshake> {
     let destroyed = false;
     const start = this.scope + 'apphandshake!!';
     const end = this.scope + 'apphandshake!"'
-    return await new Promise<Handshake>(res => {
+    return await new Promise<AppHandshake>(res => {
       const stream = this.db.createValueStream({ gt: start, lt: end });
-      stream.on('data', (value: Handshake) => {
+      stream.on('data', (value: AppHandshake) => {
         if(!destroyed && value.code === code) {
           destroyed = true;
           res(value);
@@ -232,7 +232,7 @@ export class HomeDB {
     const end = this.scope + 'apphandshake!"'
     await new Promise<void>(res => {
       const stream = this.db.createReadStream({ gt: start, lt: end });
-      stream.on('data', ({ key, value }: { key: string, value: Handshake }) => {
+      stream.on('data', ({ key, value }: { key: string, value: AppHandshake }) => {
         if((value.created + this.handshakeExpTime) > Date.now())
         handshakes.push(key);
       }).on('close', () => res());
@@ -241,5 +241,48 @@ export class HomeDB {
     for(const hs of handshakes)
       batch = batch.del(hs);
     await batch.write();
+  }
+
+  // master keys
+
+  async getMasterKey(id: string): Promise<HomeMasterKey> {
+    return this.safeGet(this.scope + 'homemasterkey!!' + id);
+  }
+
+  async addMasterKey(key: HomeMasterKey): Promise<string> {
+    delete key.id;
+
+    let id: string;
+    do {
+      id = v4();
+    } while(await this.getMasterKey(id) != null);
+
+    await this.db.put(this.scope + 'homemasterkey!!' + id, key);
+    return id;
+  }
+
+  async putMasterKey(id: string, key: HomeMasterKey): Promise<void> {
+    delete key.id;
+    await this.db.put(this.scope + 'homemasterkey!!' + id, key);
+  }
+
+  async delMasterKey(id: string): Promise<void> {
+    await this.db.del(this.scope + 'homemasterkey!!' + id);
+  }
+
+  async getMasterKeysForUser(user: string): Promise<HomeMasterKey[]> {
+    const keys: HomeMasterKey[] = [];
+
+    const start = this.scope + 'homemasterkey!!';
+    const end = this.scope + 'homemasterkey!"'
+    await new Promise<void>(res => {
+      const stream = this.db.createValueStream({ gt: start, lt: end });
+      stream.on('data', ({ key, value }: { key: string, value: HomeMasterKey }) => {
+        if(value.user === user)
+          keys.push(Object.assign({ id: key.slice(start.length) }, value));
+      }).on('close', () => res());
+    });
+
+    return keys;
   }
 }

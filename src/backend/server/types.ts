@@ -9,7 +9,4 @@ export interface Config extends AuthConfig, DiskConfig, HomeConfig {
 
   readonly dbName: string;
   readonly big: boolean;
-
-  readonly dbs: { [name: string]: string };
-  readonly stores: { [name: string]: string };
 }

@@ -11,17 +11,17 @@ export interface App {
   readonly app: string;
   readonly secret: string; // hashed with app
   readonly user: string;
-  readonly store: { type: 'local', url: string } | { type: 'custom', url: string, token: string };
-  readonly db: { type: 'local', url: string } | { type: 'custom', url: string, token: string };
+  readonly store: { type: 'local', url: string } | { type: 'custom', url: string, session: string };
+  readonly db: { type: 'local', url: string } | { type: 'custom', url: string, session: string };
 }
 
-export interface Handshake {
+export interface AppHandshake {
   id?: string;
 
   code?: string;
   user?: string;
-  store?: { type: 'local', url: string } | { type: 'custom', url: string, token: string };
-  db?: { type: 'local', url: string } | { type: 'custom', url: string, token: string };
+  store?: { type: 'local', url: string } | { type: 'custom', url: string, session: string };
+  db?: { type: 'local', url: string } | { type: 'custom', url: string, session: string };
 
   readonly app: string; // id
   readonly redirect: string;
@@ -29,6 +29,15 @@ export interface Handshake {
   readonly dbScopes?: readonly string[];
   readonly fileScopes?: readonly string[];
   readonly created: number;
+}
+
+export interface HomeMasterKey {
+  id?: string;
+
+  readonly user: string;
+  readonly type: 'file' | 'db';
+  readonly url: string;
+  readonly key: string;
 }
 
 export interface Config {

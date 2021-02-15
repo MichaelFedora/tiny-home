@@ -1,9 +1,9 @@
 import { randomBytes } from 'crypto';
 import { json, Request, Response, NextFunction, Router } from 'express';
 
-import { wrapAsync, handleError, MalformedError, NotFoundError, User, AuthDB, NotAllowedError } from 'tiny-host-common';
+import { wrapAsync, handleError, MalformedError, NotFoundError, User, AuthDB, NotAllowedError, validateUserSession } from 'tiny-host-common';
 
-import { Handshake, Config } from './types';
+import { AppHandshake, Config } from './types';
 import { hash } from './util';
 import { validateAppSession } from './middleware';
 import { HomeDB } from './home-db';
@@ -19,7 +19,7 @@ export class HomeApi {
     },
     db: HomeDB,
     getUser: (id: string) => Promise<User>,
-    getToken: (type: 'store' | 'db', url: string, user: User, scopes: readonly string[], appToken: string) => Promise<string>,
+    getSession: (type: 'store' | 'db', url: string, user: User, scopes: readonly string[], appSession: string) => Promise<string>,
     userSessionValidator: (req: Request, res: Response, next: NextFunction) => void,
     router = Router(),
     errorHandler = handleError) {
@@ -28,7 +28,7 @@ export class HomeApi {
 
     router.get('/info', (_, res) => res.json({ type: 'home' }));
 
-    const authApp = validateAppSession(db, getUser);
+    // const authApp = validateAppSession(db, getUser);
     const optAuthApp = validateAppSession(db, getUser, true);
 
     const authRouter = Router();
@@ -49,7 +49,7 @@ export class HomeApi {
       res.sendStatus(204);
     }));
 
-    authRouter.post('/token', json(), wrapAsync(async (req, res) => {
+    authRouter.post('/session', json(), wrapAsync(async (req, res) => {
       if(!req.body.app || !req.body.redirect || !req.body.scopes || !req.body.code || !req.body.secret)
         throw new MalformedError('Body should contain: { app, redirect, scopes, code, secret }!');
 
@@ -84,49 +84,49 @@ export class HomeApi {
 
       const user = await getUser(handshake.user);
 
-      const tokens: {
-        home?: { url: string, token: string },
-        store?: { type: string, url: string, token: string },
-        db?: { type: string, url: string, token: string }
+      const sessions: {
+        home?: { url: string, session: string },
+        store?: { type: string, url: string, session: string },
+        db?: { type: string, url: string, session: string }
       } = { };
 
-      const token = await db.addAppSession(app.id, user.id, {
+      const session = await db.addAppSession(app.id, user.id, {
         fileScopes: scopes.includes('store') ? handshake.fileScopes || ['/appdata/' + handshake.app + '/' + secret] : [],
         dbScopes: scopes.includes('db') ? handshake.dbScopes || ['appdata.' + app.app + '.' + app.secret] : []
       });
 
       if(scopes.includes('home'))
-        tokens.home = { url: config.serverOrigin, token };
+        sessions.home = { url: config.serverOrigin, session };
 
       if(scopes.includes('store')) {
         if(!app.store)
-          tokens.store = null;
+          sessions.store = null;
         else if(app.store.type === 'custom')
-          tokens.store = app.store;
+          sessions.store = app.store;
         else {
-          tokens.store = {
+          sessions.store = {
             type: 'local',
             url: app.store.url,
-            token: await getToken('store', app.store.url, user, handshake.fileScopes, token)
+            session: await getSession('store', app.store.url, user, handshake.fileScopes, session)
           };
         }
       }
 
       if(scopes.includes('db')) {
         if(!app.db)
-          tokens.db = null;
+          sessions.db = null;
         else if(app.db.type === 'custom')
-          tokens.db = app.db;
+          sessions.db = app.db;
         else {
-          tokens.db = {
+          sessions.db = {
             type: 'local',
             url: app.db.url,
-            token: await getToken('db', app.store.url, user, handshake.dbScopes, token)
+            session: await getSession('db', app.store.url, user, handshake.dbScopes, session)
           };
         }
       }
 
-      res.json(tokens);
+      res.json(sessions);
     }));
 
     const handshakeRouter = Router();
@@ -163,7 +163,7 @@ export class HomeApi {
       const hsId = await db.addAppHandshake(info);
 
       res.redirect(`/handshake?handshake=${hsId}${req.query.username ? '&username=' + String(req.query.username) : ''}`);
-    }))
+    }));
 
     handshakeRouter.use('/:id', userSessionValidator, wrapAsync(async (req, res, next) => {
       if(!req.user)
@@ -201,17 +201,17 @@ export class HomeApi {
       if(req.query.db ? typeof req.query.db !== 'string' : scopes.includes('db'))
         throw new MalformedError('DB scope is required (as string) but not provided by query!');
 
-      let storeInfo: Handshake['store'] = null;
-      let dbInfo: Handshake['db'] = null;
+      let storeInfo: AppHandshake['store'] = null;
+      let dbInfo: AppHandshake['db'] = null;
 
       if(req.query.store) {
         let storeType = String(req.query.store);
 
         if(storeType === 'custom') {
           if(!req.query.storeUrl || typeof req.query.storeUrl !== 'string' ||
-            !req.query.storeToken || typeof req.query.storeToken !== 'string')
-            throw new MalformedError('A custom store must also have &storeUrl=.. and &storeToken=.. queries!');
-          storeInfo = { type: 'custom', url: req.query.storeUrl, token: req.query.storeToken };
+            !req.query.storeSession || typeof req.query.storeSession !== 'string')
+            throw new MalformedError('A custom store must also have &storeUrl=.. and &storeSession=.. queries!');
+          storeInfo = { type: 'custom', url: req.query.storeUrl, session: req.query.storeSession };
         } else {
           const entry = config.stores.find(({ name }) => name === storeType);
           if(!entry)
@@ -225,10 +225,10 @@ export class HomeApi {
 
         if(dbType === 'custom') {
           if(!req.query.dbUrl || typeof req.query.dbUrl !== 'string' ||
-            !req.query.dbToken || typeof req.query.dbToken !== 'string')
-            throw new MalformedError('A custom db must also have &dbUrl=.. and &dbToken=.. queries!');
+            !req.query.dbSession || typeof req.query.dbSession !== 'string')
+            throw new MalformedError('A custom db must also have &dbUrl=.. and &dbSession=.. queries!');
 
-            dbInfo = { type: 'custom', url: String(req.query.dbUrl), token: req.query.dbToken };
+            dbInfo = { type: 'custom', url: String(req.query.dbUrl), session: req.query.dbSession };
         } else {
           const entry = config.dbs.find(({ name }) => name === dbType);
           if(!entry)
@@ -263,6 +263,45 @@ export class HomeApi {
     authRouter.use('/handshake', handshakeRouter, errorHandler('home-auth-handshake'));
 
     router.use('/auth', authRouter, errorHandler('home-auth'));
+
+    const masterKeyRouter = Router();
+
+    masterKeyRouter.use(userSessionValidator);
+
+    masterKeyRouter.get('', wrapAsync(async (req, res) => res.json(await db.getMasterKeysForUser(req.user.id))));
+    masterKeyRouter.get('/:id', wrapAsync(async (req, res) => {
+      const mk = await db.getMasterKey(req.params.id);
+      if(mk.user !== req.user.id)
+        res.json(null);
+      else
+        res.json(mk);
+    }));
+
+    masterKeyRouter.post('', json(), wrapAsync(async (req, res) => {
+      if(!req.body.url || typeof req.body.url !== 'string' ||
+        !req.body.key || typeof req.body.key !== 'string' ||
+        !req.body.type || typeof req.body.type !== 'string' ||
+        !['file', 'db'].includes(req.body.type))
+        throw new MalformedError('Body should be like so: { url, key, type }');
+
+      // verify?
+
+      await db.addMasterKey({ user: req.user.id, url: req.body.url, key: req.body.key, type: req.body.type });
+
+      res.sendStatus(204);
+    }));
+
+    masterKeyRouter.delete('/:id', wrapAsync(async (req, res) => {
+      const mk = await db.getMasterKey(req.params.id);
+      if(mk.user !== req.user.id)
+        return res.sendStatus(204);
+
+      await db.delMasterKey(req.params.id);
+
+      res.sendStatus(204);
+    }));
+
+    authRouter.use('/master-key', masterKeyRouter, handleError('home-auth-master-key'));
 
     router.get('/self', optAuthApp, wrapAsync(async (req, res, next) => {
       if(!req.appsession)

@@ -65,15 +65,15 @@ To authenticate with an application:
 
 Go to `{origin}/api/v1/auth/handshake/start?app="{app}"&redirect="https://{app}{url}"&scopes=home,store,db`
 Be redirect back to the redirect with the query `?code={code}`
-Get token via `POST {origin}/api/v1/auth/token` with the body
+Get session via `POST {origin}/api/v1/auth/session` with the body
 `{ app, redirect: "https://{app}{url}", code, scope: "home,store,db" }`
 and recieve the following response schema:
 
 ```typescript
-interface TokenResponse {
-  home?: { url: string; token: string; }
-  storage?: { type: "local" | "custom"; url: string; token: string; fileScopes?: string[] }
-  db?: { type: "local" | "custom"; url: string; token: string; }
+interface SessionResponse {
+  home?: { url: string; session: string; }
+  storage?: { type: "local" | "custom"; url: string; session: string; fileScopes?: string[] }
+  db?: { type: "local" | "custom"; url: string; session: string; }
 }
 ```
 
@@ -85,7 +85,7 @@ then don't request the "storage" scope. It is always recommended to get the "hom
 but maybe you don't need that for your particular situation.
 
 Storage/db types can be "local" or "custom". The "custom" type is for custom entries; like
-a firebase/mongo url & token, or a dropbox/icloud url & token. Tiny-home only stores
+a firebase/mongo url & session, or a dropbox/icloud url & session. Tiny-home only stores
 minimal information about these, and only has the ability to natively provide tiny-storage
 and tiny-db services from the as specified in the `config.json`.
 
@@ -100,7 +100,7 @@ app; if so, then update your tiny-home entry, otherwise, use what's provided.
 
 - Redirect to `https://my-home.example.com/api/v1/auth/handshake/start?app="myapp.io"&redirect="https://myapp.io/auth"&scopes="home,store"&fileScopes=["/programs/myapp.io", "/public/myapp.io"]`
 - Redirected back (after authenticating) to `https://myapp.io/auth?code=a1b2c3d4e5f6`
-- Make request `POST https://my-home.example.com/api/v1/auth/token` with the following body to get the tokens:
+- Make request `POST https://my-home.example.com/api/v1/auth/session` with the following body to get the sessions:
 ```json
 {
   "app": "myapp.io",
@@ -114,8 +114,8 @@ app; if so, then update your tiny-home entry, otherwise, use what's provided.
 - Result (notice how `fileScopes[1]` was modified):
 ```json
 {
-  "home": { "url": "https://my-home.example.com/", "token": "abcdef.ghijklmn.opqrs" },
-  "storage": { "type": "local", "url": "https://my-store.example.com/", "token": "abcdef.ghijklmn.opqrs", "fileScopes": ["/programs/myapp.io", "/public/programs/myapp.io"] }
+  "home": { "url": "https://my-home.example.com/", "session": "abcdef.ghijklmn.opqrs" },
+  "storage": { "type": "local", "url": "https://my-store.example.com/", "session": "abcdef.ghijklmn.opqrs", "fileScopes": ["/programs/myapp.io", "/public/programs/myapp.io"] }
 }
 ```
 
@@ -123,7 +123,7 @@ app; if so, then update your tiny-home entry, otherwise, use what's provided.
 
 - Redirect to `https://my-home.example.com/api/v1/auth/handshake/start?app="myapp.io"&redirect="https://myapp.io/auth"&scopes="home,store,db"`
 - Redirected back (after authenticating) to `https://myapp.io/auth?code=a1b2c3d4e5f6`
-- Make request `POST https://my-home.example.com/api/v1/auth/token` with the following body to get the tokens:
+- Make request `POST https://my-home.example.com/api/v1/auth/session` with the following body to get the sessions:
 ```json
 {
   "app": "myapp.io",
@@ -136,29 +136,29 @@ app; if so, then update your tiny-home entry, otherwise, use what's provided.
 - Result:
 ```json
 {
-  "home": { "url": "https://my-home.example.com/", "token": "abcdef.ghijklmn.opqrs" },
-  "storage": { "type": "custom", "url": "https://dropbox.com/", "token": "abcdef.ghijklmn.opqrs" },
-  "db": { "type": "local", "url": "https://my-db.example.com/", "token": "abcdef.tuvwxyz.qwert" }
+  "home": { "url": "https://my-home.example.com/", "session": "abcdef.ghijklmn.opqrs" },
+  "storage": { "type": "custom", "url": "https://dropbox.com/", "session": "abcdef.ghijklmn.opqrs" },
+  "db": { "type": "local", "url": "https://my-db.example.com/", "session": "abcdef.tuvwxyz.qwert" }
 }
 ```
 
 ## Api Reference
 
-SubToken Interface:
+SubSession Interface:
 ```typescript
-interface SubTokenInterface {
+interface SubSessionInterface {
   type: string;
   url: string;
-  token: string;
+  session: string;
 }
 ```
 
-Token Interface:
+session Interface:
 ```typescript
-interface TokenInterface {
-  home?: { url: string; token: string };
-  store?: SubTokenInterface & { fileScopes?: string[] };
-  db?: SubTokenInterface;
+interface SessionInterface {
+  home?: { url: string; session: string };
+  store?: Interface & { fileScopes?: string[] };
+  db?: SubSessionInterface;
 }
 ```
 
@@ -170,9 +170,9 @@ interface UserAuthInterface {
 }
 ```
 
-App Token Request Interface:
+App session Request Interface:
 ```typescript
-interface AppTokenReqInterface {
+interface AppsessionReqInterface {
   app: string;
   redirect: string;
   scopes: string;
@@ -191,7 +191,7 @@ Namespace: `/api/v1`.
 HandshakeQuery:
 - `?app={app}` - the app(domain)
 - `&redirect={app}{url}` - what tiny-home should redirect to once it is done
-- `&scopes=home,file,db` - what tokens it wants
+- `&scopes=home,file,db` - what sessions it wants
 - `&fileScopes=["path","path2",...]` - i.e. `&fileScopes=["/programs/my-app","/documents","/public/my-app"]`;
 the paths the app wants, particularly for tiny-file-hosts; these may come back different than requested
 
@@ -201,33 +201,33 @@ the paths the app wants, particularly for tiny-file-hosts; these may come back d
 |GET |None |/auth/handshake/:id      |                |                      |                |TinyHome handshaking    |
 |GET |None |/auth/handshake/:id/approve|              |                      |                |TinyHome handshaking    |
 |GET |None |/auth/handshake/:id/cancel|               |                      |                |TinyHome handshaking    |
-|POST|None |/auth/login              |                |`UserAuthInterface`   |`"token"`       |User auth route         |
+|POST|None |/auth/login              |                |`UserAuthInterface`   |`"session"`       |User auth route         |
 |POST|None |/auth/register           |                |`UserAuthInterface`   |                |User registration       |
 |GET |None |/auth/can-register       |                |                      |`true|false`    |User registration active|
-|POST|None |/auth/token              |                |`AppTokenReqInterface`|`TokenInterface`|App token requesting    |
-|GET |Token|/auth/refresh            |                |                      |`"token"`       |App/user token refresh  |
-|POST|Token|/auth/logout             |                |                      |                |App/user logout         |
+|POST|None |/auth/session              |                |`AppsessionReqInterface`|`sessionInterface`|App session requesting    |
+|GET |session|/auth/refresh            |                |                      |`"session"`       |App/user session refresh  |
+|POST|session|/auth/logout             |                |                      |                |App/user logout         |
 
 **App `/app`:**
 
-Requires an app token.
+Requires an app session.
 
 |Type|Path        |Query|Request Body                |Return Body        |Description           |
 |----|------------|-----|----------------------------|-------------------|----------------------|
-|*PUT |/app/storage|     |`Partial<SubTokenInterface>`|`SubTokenInterface`|App storage info      |
-|*PUT |/app/db     |     |`Partial<SubTokenInterface>`|`SubTokenInterface`|App db info           |
+|*PUT |/app/storage|     |`Partial<SubSessionInterface>`|`SubSessionInterface`|App storage info      |
+|*PUT |/app/db     |     |`Partial<SubSessionInterface>`|`SubSessionInterface`|App db info           |
 
 **User `/user`:**
 
-Requires a user token.
+Requires a user session.
 
 App Info Interface:
 ```typescript
 interface AppInfo {
   id: string; // const
   domain: string; // const
-  storage?: SubTokenInterface // modifiable
-  db?: SubTokenInterface; // modifiable
+  storage?: SubSessionInterface // modifiable
+  db?: SubSessionInterface; // modifiable
 }
 ```
 
@@ -237,8 +237,8 @@ interface TinyInfo {
   id: string; // const
   type: 'store' | 'db';
   url: string;
-  auth: { token?: string; username?: string; password?: string; } |
-    /* user-added */ { token: string } | 
+  auth: { session?: string; username?: string; password?: string; } |
+    /* user-added */ { session: string } | 
     /* natively-provided */ { username: string; password: string; };
   // note: the username/password are generated randomly
 }
