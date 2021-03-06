@@ -1,101 +1,11 @@
-// @import './colors.scss';
+@import '~tiny-host-common/src/web/colors.scss';
 
-html {
-  overflow-x: unset;
-  overflow-y: unset;
-  position: absolute;
-}
+// try to make dark mode??
+/*$background: $black-ter;
+$text: $grey-light;
+$text-dark: $grey-lighter;
+$text-darker: $white-ter;
+$text-light: $grey;*/
 
-html, body {
-  min-height: 100%;
-  min-width: 100%;
-  margin: 0;
-  // color: $text-default;
-  // background: $background;
-  overflow-y: auto;
-}
+@import '~tiny-host-common/src/web/styles.scss';
 
-a.hover-underline:hover::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: -1px;
-  right: 0;
-  margin: auto;
-  height: 2px;
-  background-color: currentColor;
-}
-
-a.hover-underline-child:hover {
-  > span,h1,h2,h3,h4,a {
-    &::after {
-      content: "";
-      position: absolute;
-      left: 0;
-      bottom: -1px;
-      right: 0;
-      margin: auto;
-      height: 2px;
-      background-color: currentColor;
-    }
-  }
-}
-
-.fade-enter-active, .fade-leave-active {
-  transition: opacity 150ms;
-}
-.fade-enter, .fade-leave-to /* .fade-leave-active below version 2.1.8 */ {
-  opacity: 0
-}
-
-button.fab {
-
-  height: 2.75rem;
-  width: 2.75rem;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.33);
-
-  &.is-tr {
-    position: absolute;
-    top: 1rem;
-    right: 1rem;
-  }
-
-  &.is-br {
-    position: absolute;
-    bottom: 1rem;
-    right: 1rem;
-  }
-}
-
-figure.avatar {
-  height: 24px;
-  width: 24px;
-  display: flex;
-  justify-content: center;
-  align-content: center;
-  border-radius: 50%;
-  overflow: hidden;
-  > img {
-    align-self: center;
-  }
-}
-
-div.avatar {
-  border-radius: 50%;
-  height: 24px;
-  width: 24px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-transform: uppercase;
-  text-shadow: 1px 1px 1px rgba(0,0,0,0.1);
-  line-height: 1;
-  color: white;
-  background-color: hsl(256, 60%, 59%);
-  font-size: 12px;
-}

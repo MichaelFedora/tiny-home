@@ -38,6 +38,8 @@ class Api {
     const getUser = (id: string) => db.auth.getUser(id);
     const userSessionValidator = validateUserSession(db.auth);
 
+    this.router.get('/type', (_, res) => res.send('home'));
+
     // takes place of auth api
     this._homeApi = new HomeApi(Object.assign({ }, config, {
       dbs: [{ name: 'local', url: config.serverOrigin }],

@@ -1,12 +1,18 @@
 import Vue from 'vue';
 import VueRouter from 'vue-router';
 
-const HomePage = () => import('./pages/home/home');
-const SettingsPage = () => import('./pages/settings/settings');
-const LoginPage = () => import('./pages/login/login');
-const HandshakePage = () => import('./pages/handshake/handshake');
-import NotFoundPage from './pages/not-found/not-found';
-import dataBus from './services/data-bus';
+// @ts-ignore
+const HomePage = () => import('pages/home.vue');
+// @ts-ignore
+const ConnectionsPage = () => import('pages/connections.vue');
+// @ts-ignore
+const LoginPage = () => import('pages/login.vue');
+// @ts-ignore
+const HandshakePage = () => import('pages/handshake.vue');
+
+// @ts-ignore
+import NotFoundPage from 'pages/not-found.vue';
+import dataBus from 'services/data-bus';
 
 
 Vue.use(VueRouter);
@@ -14,17 +20,21 @@ Vue.use(VueRouter);
 const router = new VueRouter({
   mode: 'history',
   routes: [
-    { path: '/', component: HomePage, name: 'home' }, // app shortcuts
-    { path: '/settings', component: SettingsPage, name: 'settings' }, // managing connections
+    { path: '/', component: HomePage, name: 'home' }, // main "menu"
+    { path: '/connections', component: ConnectionsPage, name: 'connections' }, // managing sessions, master keys
     { path: '/login', component: LoginPage, name: 'login' }, // loggin in (obv)
-    { path: '/handshake', component: HandshakePage, name: 'handshake' }, // loggin in (obv)
+    { path: '/handshake', component: HandshakePage, name: 'handshake' }, // handshaking apps
     { path: '**', component: NotFoundPage, name: 'not-found' }
   ]
 });
 
 router.beforeEach((to, from, next) => {
+  const baseTitle = 'tiny home';
+
   if(to.path !== from.path) {
-    if(to.path.length > 1) {
+    if(to.name)
+      document.title = baseTitle + ' - ' + to.name;
+    else if(to.path.length > 1) {
 
       const sdir = [];
       let buff = '';
@@ -36,8 +46,9 @@ router.beforeEach((to, from, next) => {
         }
       });
 
-      document.title = 'tiny home - ' + sdir.join(' - ');
-    } else document.title = 'tiny home';
+      document.title = baseTitle + ' - ' + sdir.join(' - ');
+    } else
+      document.title = baseTitle;
   }
 
   if(!dataBus.session && !/^\/login/.test(to.path))
