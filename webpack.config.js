@@ -1,4 +1,5 @@
 const path = require('path');
+const { DefinePlugin } = require('webpack');
 const ForkTsCheckWebpackPlugin = require('fork-ts-checker-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const VueLoaderPlugin = require('vue-loader/lib/plugin');
@@ -10,7 +11,9 @@ const TerserJsPlugin = require('terser-webpack-plugin')
 module.exports = (env, argv) => {
 
   const production = (env && env.production) || (argv && argv.mode == 'production') ? true : false;
-  console.log('Environment:', (production ? 'Production' : 'Development') + '!')
+  const docs = env && env.docs;
+  const docsUrl = '';
+  console.log('Environment:', (production ? 'Production' : 'Development') + (docs ? ' (docs)' : '') + '!')
 return {
   mode: production ? 'production' : 'development',
   entry: {
@@ -19,7 +22,7 @@ return {
 
   output: {
     path: path.resolve(__dirname, production ? 'build-prod' : 'build', 'frontend'),
-    publicPath: '',
+    publicPath: docs  ? docsUrl : '',
     filename: '[name].[contenthash].js',
   },
 
@@ -75,6 +78,10 @@ return {
   },
 
   plugins: [
+    new DefinePlugin({
+      'production': Boolean(production),
+      'docs': Boolean(docs)
+    }),
     new CleanWebpackPlugin(),
     new VueLoaderPlugin(),
     new ForkTsCheckWebpackPlugin(),
@@ -84,7 +91,8 @@ return {
     new HtmlWebpackPlugin({
       chunks: ['tiny-home-frontend'],
       template: 'src/frontend/index.html',
-      filename: 'index.html'
+      filename: 'index.html',
+      base: docs ? docsUrl : '/'
     })
   ]
 }

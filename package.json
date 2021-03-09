@@ -5,7 +5,9 @@
   "repository": "github:MichaelFedora/tiny-home",
   "main": "dist/tiny-home.js",
   "scripts": {
-    "build-lib": "del-cli lib && tsc -p tsconfig.lib.json",
+    "build-lib": "del-cli build/lib && tsc -p tsconfig.lib.json",
+    "build-server": "del-cli build/server && tsc -p tsconfig.backend.json",
+    "build-frontend": "del-cli build/frontend && webpack",
     "build": "del-cli build && tsc -p tsconfig.backend.json && webpack",
     "start": "node build/backend/server/tiny-home.js",
     "test": "del-cli build && tsc -p tsconfig.backend.json && webpack && node build/backend/server/tiny-home.js"
