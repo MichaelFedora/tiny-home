@@ -22,7 +22,7 @@
       <span :key='"mk-user-" + i'>{{ mk.user }}</span>
       <span :key='"mk-name-" + i'>{{ mk.url }}</span>
       <div :key='"mk-opts-" + i'>
-        <button class='danger' @click='remove("mk", mk)'>revoke</button>
+        <button class='danger' @click='remove("mk", mk)'>remove</button>
       </div>
     </template>
 
@@ -41,7 +41,7 @@
       <span :key='"app-store-" + i'>{{ app.store ? app.store.type + ':' + app.store.url : 'n/a' }}</span>
       <span :key='"app-db-" + i'>{{ app.db ? app.db.type + ':' + app.db.url : 'n/a' }}</span>
       <div :key='"app-opts-" + i'>
-        <button class='danger' @click='remove("app", app)'>revoke</button>
+        <button class='danger' @click='remove("app", app)'>remove</button>
       </div>
       <template v-for='(appsess, j) of app.sessions'>
         <span :key='"app-sess-created-" + i + "-" + j'>{{ (new Date(appsess.created)).toLocaleString() }}</span>
@@ -96,6 +96,8 @@ import localApi from 'services/local-api';
 
 import { openModal } from 'utility';
 
+import { MasterKey } from 'tiny-host-common'
+
 export default Vue.extend({
   name: 'tiny-connections',
   components: { SvgIcon },
@@ -113,9 +115,28 @@ export default Vue.extend({
       if(this.working) return;
       this.working = true;
 
-      localApi.auth.getSessions().then(res => this.sessions = res, () => { });
-      // localApi.home.getApps().then(res => this.sessions = res, () => { });
-      localApi.auth.getMasterKeys().then(res => this.masterkeys = res, () => this.masterkeys = null);
+      await localApi.auth.getSessions().then(res => this.sessions = res, () => { });
+      await localApi.home.getApps().then(res => this.apps = res, () => { });
+      const appsessions: {
+        id: string;
+        app: string;
+        dbScopes: string[];
+        fileScopes: string[];
+        created: number;
+      }[] = (await localApi.home.getAppSessions().catch(() => null)) || [];
+      await localApi.auth.getMasterKeys().then(res => this.masterkeys = res, () => this.masterkeys = null);
+
+      for(const sess of appsessions) {
+        const app = this.apps.find(a => a.id === sess.app);
+
+        if(!app)
+          continue;
+
+        if(!app.sessions)
+          app.sessions = [];
+
+        app.sessions.push(sess);
+      }
 
       this.working = false;
     },
@@ -148,8 +169,32 @@ export default Vue.extend({
 
       this.refresh();
     },
-    async remove(type: 'mk' | 'app', item: any) {
+    async remove(type: 'mk' | 'app', item: Partial<MasterKey & { id: string, app: string }>) {
+      if(type === 'mk') {
+        const choice = await openModal({
+          title: 'Remove Remote Node',
+          message: 'This cannot be undone. It could also break any apps that currently use this node. Are you sure?',
+          type: 'danger'
+        });
+        if(!choice)
+          return;
 
+        await localApi.auth.delMasterKey(item.id);
+
+        this.refresh();
+      } else if(type === 'app') {
+        const choice = await openModal({
+          title: 'Remove App "' + item.app + '"',
+          message: 'This removes any preferences and permissions you have saved for this applications, including storage scopes. Are you sure?',
+          type: 'danger'
+        });
+        if(!choice)
+          return;
+
+        await localApi.home.delApp(item.id);
+
+        this.refresh();
+      }
     },
     async revoke(type: 's' | 'as', id: string) {
       switch(type) {
@@ -164,7 +209,7 @@ export default Vue.extend({
 });
 </script>
 <style lang='scss'>
-@import 'colors.scss';
+@import '~tiny-host-common/src/web/colors.scss';
 
 #tiny-connections {
 

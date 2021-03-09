@@ -262,8 +262,6 @@ export class HomeApi {
 
     authRouter.use('/handshake', handshakeRouter, errorHandler('home-auth-handshake'));
 
-    router.use('/auth', authRouter, errorHandler('home-auth'));
-
     const masterKeyRouter = Router();
 
     masterKeyRouter.use(userSessionValidator);
@@ -301,13 +299,15 @@ export class HomeApi {
       res.sendStatus(204);
     }));
 
-    authRouter.use('/master-key', masterKeyRouter, handleError('home-auth-master-key'));
+    authRouter.use('/master-key', masterKeyRouter, errorHandler('home-auth-master-key'));
+
+    router.use('/auth', authRouter, errorHandler('home-auth'));
 
     router.get('/self', optAuthApp, wrapAsync(async (req, res, next) => {
       if(!req.appsession)
         return next();
       res.json({ id: req.user.id, username: req.user.username });
-    }), handleError('home-get-self'));
+    }), errorHandler('home-get-self'));
 
     router.delete('/self', optAuthApp, wrapAsync(async (req, res, next) => {
       if(!req.appsession)
@@ -315,6 +315,50 @@ export class HomeApi {
 
       await db.delApp(req.authedApp.app);
       res.sendStatus(204);
-    }), handleError('home-delete-self'));
+    }), errorHandler('home-delete-self'));
+
+    router.get('/apps', optAuthApp, wrapAsync(async (req, res, next) => {
+      if(!req.appsession)
+        return next();
+
+      res.json({ id: req.authedApp.id, app: req.authedApp.app, store: req.authedApp.store, db: req.authedApp.db });
+    }), userSessionValidator, wrapAsync(async (req, res) => {
+      const apps = await db.getAppsForUser(req.user.id);
+
+      res.json(apps.map(app => ({ id: app.id, app: app.app, store: app.store, db: app.db })));
+    }), errorHandler('home-apps'));
+
+    router.delete('/apps/:id', userSessionValidator, wrapAsync(async (req, res) => {
+      const app = await db.getApp(req.params.id);
+      if(!app || app.user !== req.user.id)
+        throw new NotAllowedError('Cannot delete an app that is not yours, or is nonexistant!');
+
+      await db.delApp(req.params.id);
+
+      res.sendStatus(204);
+    }), errorHandler('home-apps'));
+
+    router.get('/appsessions', optAuthApp, wrapAsync(async (req, res, next) => {
+      if(!req.appsession)
+        return next();
+
+      const appsesses = await db.getAppSessionsForApp(req.authedApp.id);
+
+      res.json(appsesses.map(sess => ({ id: sess.id, app: sess.app, created: sess.created, fileScopes: sess.fileScopes, dbScopes: sess.dbScopes })));
+    }), userSessionValidator, wrapAsync(async (req, res) => {
+      const appsesses = await db.getAppSessionsForUser(req.user.id);
+
+      res.json(appsesses.map(sess => ({ id: sess.id, app: sess.app, created: sess.created, fileScopes: sess.fileScopes, dbScopes: sess.dbScopes })));
+    }), errorHandler('home-appsessions'));
+
+    router.delete('/appsessions/:id', userSessionValidator, wrapAsync(async (req, res) => {
+      const appsess = await db.getAppSession(req.params.id);
+      if(!appsess || appsess.user !== req.user.id)
+        throw new NotAllowedError('Cannot delete an appsession that is not yours, or is nonexistant!');
+
+      await db.delApp(req.params.id);
+
+      res.sendStatus(204);
+    }), errorHandler('home-appsessions'));
   }
 }

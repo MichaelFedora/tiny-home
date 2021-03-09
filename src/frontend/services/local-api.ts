@@ -100,6 +100,37 @@ class LocalApi {
     await axios.delete(`${url}/self?sid=${dataBus.session}&pass=${password}`).catch(e => { handleError(e); throw e; });
     dataBus.clear();
   }
+
+  private _home = Object.freeze({
+
+    async getApps(): Promise<{ id: string, app: string, store?: any, db?: any }[]> {
+      return axios.get(`${url}/apps?sid=${dataBus.session}`).then(
+        res => res.data,
+        e => {
+          handleError(e);
+          throw e;
+      });
+    },
+
+    async delApp(id: string): Promise<void> {
+      await axios.delete(`${url}/apps/${id}?sid=${dataBus.session}`).catch(e => { handleError(e); throw e; });
+    },
+
+    async getAppSessions(): Promise<{ id: string, app: string, dbScopes: string[], fileScopes: string[], created: number }[]> {
+      return axios.get(`${url}/appsessions?sid=${dataBus.session}`).then(
+        res => res.data,
+        e => {
+          handleError(e);
+          throw e;
+      });
+    },
+
+    async delAppSession(id: string): Promise<void> {
+      await axios.delete(`${url}/appsessions/${id}?sid=${dataBus.session}`).catch(e => { handleError(e); throw e; });
+    },
+  });
+
+  public get home() { return this._home; }
 };
 
 export default new LocalApi();

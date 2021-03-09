@@ -78,29 +78,29 @@ export class HomeDB {
     await this.delManyAppSessions(sessions);
   }
 
-  async getAppSessionsForUser(user: string): Promise<string[]> {
-    const sessions: string[] = [];
+  async getAppSessionsForUser(user: string): Promise<AppSession[]> {
+    const sessions: AppSession[] = [];
     const start = this.scope + 'appsession!!';
     const end = this.scope + 'appsession!"'
     await new Promise<void>(res => {
       const stream = this.db.createReadStream({ gt: start, lt: end });
       stream.on('data', ({ key, value }: { key: string, value: AppSession }) => {
         if(value.user === user)
-          sessions.push(key.slice(0, start.length));
+          sessions.push({ id: key.slice(0, start.length), ...value });
       }).on('close', () => res());
     });
     return sessions;
   }
 
-  async getAppSessionsForApp(app: string): Promise<string[]> {
-    const sessions: string[] = [];
+  async getAppSessionsForApp(app: string): Promise<AppSession[]> {
+    const sessions: AppSession[] = [];
     const start = this.scope + 'appsession!!';
     const end = this.scope + 'appsession!"'
     await new Promise<void>(res => {
       const stream = this.db.createReadStream({ gt: start, lt: end });
       stream.on('data', ({ key, value }: { key: string, value: AppSession }) => {
         if(value.app === app)
-          sessions.push(key.slice(0, start.length));
+          sessions.push({ id: key.slice(0, start.length), ...value });
       }).on('close', () => res());
     });
     return sessions;
@@ -160,7 +160,7 @@ export class HomeDB {
     const start = this.scope + 'app!!';
     const end = this.scope + 'app!"'
     await new Promise<void>(res => {
-      const stream = this.db.createValueStream({ gt: start, lt: end });
+      const stream = this.db.createReadStream({ gt: start, lt: end });
       stream.on('data', ({ key, value }: { key: string, value: App }) => {
         if(value.user === user)
           apps.push(Object.assign({ id: key.slice(start.length) }, value));
@@ -276,7 +276,7 @@ export class HomeDB {
     const start = this.scope + 'homemasterkey!!';
     const end = this.scope + 'homemasterkey!"'
     await new Promise<void>(res => {
-      const stream = this.db.createValueStream({ gt: start, lt: end });
+      const stream = this.db.createReadStream({ gt: start, lt: end });
       stream.on('data', ({ key, value }: { key: string, value: HomeMasterKey }) => {
         if(value.user === user)
           keys.push(Object.assign({ id: key.slice(start.length) }, value));
