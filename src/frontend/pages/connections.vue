@@ -38,7 +38,7 @@
 
     <template v-for='(app, i) of apps'>
       <span :key='"app-app-" + i'>{{ app.app }}</span>
-      <span :key='"app-store-" + i'>{{ app.store ? app.store.type + (app.db.type !== 'local' ? ':' + (app.store.url || app.store.key) : '') : 'n/a' }}</span>
+      <span :key='"app-store-" + i'>{{ app.store ? app.store.type + (app.store.type !== 'local' ? ':' + (app.store.url || app.store.key) : '') : 'n/a' }}</span>
       <span :key='"app-db-" + i'>{{ app.db ? app.db.type + (app.db.type !== 'local' ? ':' + (app.db.url || app.db.key) : '') : 'n/a' }}</span>
       <div :key='"app-opts-" + i'>
         <button class='danger' @click='remove("app", app)'>remove</button>
