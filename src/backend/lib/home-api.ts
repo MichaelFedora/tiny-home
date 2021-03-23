@@ -23,8 +23,6 @@ export class HomeApi {
 
     this._router = router;
 
-    router.get('/info', (_, res) => res.json({ type: 'home' }));
-
     // const authApp = validateAppSession(db, getUser);
     const optAuthApp = validateAppSession(db, getUser, true);
 
@@ -224,11 +222,45 @@ export class HomeApi {
 
     handshakeRouter.get('/:id', wrapAsync(async (req, res) => {
       const masterKeys = await db.getMasterKeysForUser(req.user.id);
-      const stores = masterKeys.filter(k => k.type === 'file').map(k => ({ id: k.id, name: k.name || k.url.replace(/^https?:\/\//, ''), url: k.url }));
-      const dbs = masterKeys.filter(k => k.type === 'db').map(k => ({ id: k.id, name: k.name || k.url.replace(/^https?:\/\//, ''), url: k.url }));
+
+      let stores = masterKeys.filter(k => k.type === 'file').map(k => ({ id: k.id, name: k.name || k.url.replace(/^https?:\/\//, ''), url: k.url }));
+      let dbs = masterKeys.filter(k => k.type === 'db').map(k => ({ id: k.id, name: k.name || k.url.replace(/^https?:\/\//, ''), url: k.url }));
+
       if(config.big) {
         stores.unshift({ id: 'local', name: 'local', url: config.serverOrigin });
         dbs.unshift({ id: 'local', name: 'local', url: config.serverOrigin });
+      }
+
+      const apps = await db.getAppsForUser(req.user.id);
+      const app = apps.find(a => a.app === req.apphandshake.app);
+
+      if(app) {
+        if(app.store) {
+          if(app.store.type === 'local') { }
+            // do nothing
+          else if(app.store.type === 'custom')
+            stores.unshift({ id: 'current', name: 'custom', url: app.store.url })
+          else {
+            const masterKey = masterKeys.find(k => k.type === 'file' && k.id === (app.store as any).key);
+            if(masterKey) {
+              stores = stores.filter(a => a.id !== masterKey.id);
+              stores.unshift({ id: masterKey.id, name: masterKey.name || masterKey.url.replace(/^https?:\/\//, ''), url: masterKey.url })
+            }
+          }
+        }
+        if(app.db) {
+          if(app.db.type === 'local') { }
+            // do nothing
+          else if(app.db.type === 'custom')
+            stores.unshift({ id: 'current', name: 'custom', url: app.db.url })
+          else {
+            const masterKey = masterKeys.find(k => k.type === 'db' && k.id === (app.db as any).key);
+            if(masterKey) {
+              dbs = dbs.filter(a => a.id !== masterKey.id);
+              dbs.unshift({ id: masterKey.id, name: masterKey.name || masterKey.url.replace(/^https?:\/\//, ''), url: masterKey.url })
+            }
+          }
+        }
       }
 
       res.json({
@@ -253,12 +285,19 @@ export class HomeApi {
       let storeInfo: AppHandshake['store'] = null;
       let dbInfo: AppHandshake['db'] = null;
 
+      const apps = await db.getAppsForUser(req.user.id);
+      const app = apps.find(a => a.app === req.apphandshake.app);
+
       if(req.query.store) {
         let queryStore = String(req.query.store);
 
         if(queryStore === 'local') {
           storeInfo = { type: 'local' };
 
+        } else if(queryStore === 'current') {
+          if(!app) throw new MalformedError('Cannot use "current" configuration if no app could be found!');
+          storeInfo = { ...app.store };
+          delete (storeInfo as any).scopes;
         } else if(queryStore === 'custom') {
           if(!req.query.storeUrl || typeof req.query.storeUrl !== 'string' ||
             !req.query.storeSession || typeof req.query.storeSession !== 'string')
@@ -280,6 +319,10 @@ export class HomeApi {
         if(queryDb === 'local') {
           dbInfo = { type: 'local' };
 
+        } else if(queryDb === 'current') {
+          if(!app) throw new MalformedError('Cannot use "current" configuration if no app could be found!');
+          dbInfo = { ...app.db };
+          delete (dbInfo as any).scopes;
         } else if(queryDb === 'custom') {
           if(!req.query.dbUrl || typeof req.query.dbUrl !== 'string' ||
             !req.query.dbSession || typeof req.query.dbSession !== 'string')
