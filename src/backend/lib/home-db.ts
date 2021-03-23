@@ -1,7 +1,8 @@
 import { LevelUp } from 'levelup';
+import { cloneDeep } from 'lodash';
 import { v4 } from 'uuid';
 
-import { App, AppSession, AppHandshake, HomeMasterKey } from './types';
+import { App, AppSession, AppHandshake, HomeMasterKey } from './home-types';
 import { hash } from './util';
 
 export class HomeDB {
@@ -71,8 +72,8 @@ export class HomeDB {
     await new Promise<void>(res => {
       const stream = this.db.createReadStream({ gt: start, lt: end });
       stream.on('data', ({ key, value }: { key: string, value: AppSession }) => {
-        if((value.created + this.sessionExpTime) > Date.now())
-          sessions.push(key.slice(0, start.length));
+        if((value.created + this.sessionExpTime) < Date.now())
+          sessions.push(key.slice(start.length));
       }).on('close', () => res());
     });
     await this.delManyAppSessions(sessions);
@@ -86,7 +87,7 @@ export class HomeDB {
       const stream = this.db.createReadStream({ gt: start, lt: end });
       stream.on('data', ({ key, value }: { key: string, value: AppSession }) => {
         if(value.user === user)
-          sessions.push({ id: key.slice(0, start.length), ...value });
+          sessions.push({ id: key.slice(start.length), ...value });
       }).on('close', () => res());
     });
     return sessions;
@@ -100,7 +101,7 @@ export class HomeDB {
       const stream = this.db.createReadStream({ gt: start, lt: end });
       stream.on('data', ({ key, value }: { key: string, value: AppSession }) => {
         if(value.app === app)
-          sessions.push({ id: key.slice(0, start.length), ...value });
+          sessions.push({ id: key.slice(start.length), ...value });
       }).on('close', () => res());
     });
     return sessions;
@@ -123,6 +124,7 @@ export class HomeDB {
     delete app.id;
 
     await this.db.put(this.scope + 'app!!' + id, app);
+    app.id = id;
   }
 
   async getApp(id: string): Promise<App> {
@@ -135,7 +137,7 @@ export class HomeDB {
     return await this.db.del(this.scope + 'app!!' + id);
   }
 
-  async getAppFromCombo(app: string, secret: string, hashed = false): Promise<App> {
+  async getAppFromCombo(user: string, app: string, secret: string, hashed = false): Promise<App> {
     if(!hashed)
       secret = await hash(app, secret);
 
@@ -145,7 +147,7 @@ export class HomeDB {
     return await new Promise<App>(res => {
       const stream = this.db.createReadStream({ gt: start, lt: end });
       stream.on('data', ({ key, value }: { key: string, value: App }) => {
-        if(!destroyed && value.app === app && value.secret === secret) {
+        if(!destroyed && value.user === user && value.app === app && value.secret === secret) {
           destroyed = true;
           res(Object.assign({ id: key.slice(start.length) }, value));
           (stream as any).destroy();
@@ -198,6 +200,7 @@ export class HomeDB {
     delete hs.id;
 
     await this.db.put(this.scope + 'apphandshake!!' + id, hs);
+    hs.id = id;
   }
 
   async getAppHandshake(id: string): Promise<AppHandshake> {
@@ -233,7 +236,7 @@ export class HomeDB {
     await new Promise<void>(res => {
       const stream = this.db.createReadStream({ gt: start, lt: end });
       stream.on('data', ({ key, value }: { key: string, value: AppHandshake }) => {
-        if((value.created + this.handshakeExpTime) > Date.now())
+        if((value.created + this.handshakeExpTime) < Date.now())
         handshakes.push(key);
       }).on('close', () => res());
     });
@@ -246,7 +249,9 @@ export class HomeDB {
   // master keys
 
   async getMasterKey(id: string): Promise<HomeMasterKey> {
-    return this.safeGet(this.scope + 'homemasterkey!!' + id);
+    const mk = await this.safeGet(this.scope + 'homemasterkey!!' + id);
+    if(mk) mk.id = id;
+    return mk;
   }
 
   async addMasterKey(key: HomeMasterKey): Promise<string> {
@@ -264,6 +269,7 @@ export class HomeDB {
   async putMasterKey(id: string, key: HomeMasterKey): Promise<void> {
     delete key.id;
     await this.db.put(this.scope + 'homemasterkey!!' + id, key);
+    key.id = id;
   }
 
   async delMasterKey(id: string): Promise<void> {

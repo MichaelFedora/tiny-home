@@ -1,8 +1,7 @@
 import { Router, static as serveStatic } from 'express';
 import * as path from 'path';
-import axios from 'axios';
 
-import { AuthApi, handleError, NotFoundError, validateUserSession } from 'tiny-host-common';
+import { AuthApi, handleError, validateUserSession } from 'tiny-host-common';
 import { DiskApi } from 'tiny-disk-host';
 import { LevelApi } from 'tiny-level-host';
 import { HomeApi, validateUserOrAppSession } from '../lib';
@@ -44,13 +43,7 @@ class Api {
     this._homeApi = new HomeApi(Object.assign({ }, config, {
       dbs: [{ name: 'local', url: config.serverOrigin }],
       stores: [{ name: 'local', url: config.serverOrigin }]
-    }), db.home, getUser, async (type, url, user, scopes, session) => {
-      if(config.big) return session;
-      const key = user[type + 'Keys'][url];
-      if(!key)
-        throw new NotFoundError('No key found for ' + type + ' ' + url + ' !');
-      return await axios.post(`${url}/auth/generate-session?key=${key}&scopes=${JSON.stringify(scopes)}`).then(res => String(res.data));
-    }, userSessionValidator, this.router);
+    }), db.home, getUser, userSessionValidator, this.router);
     this._authApi = new AuthApi({
       whitelist: config.whitelist,
       handshakeExpTime: 0,

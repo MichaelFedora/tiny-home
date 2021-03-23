@@ -15,7 +15,7 @@
     "lib": [ "esnext" ]
   },
   "include": [
-    "src/lib/**/*.ts"
+    "src/backend/lib/**/*.ts"
   ],
   "exclude": [
     "node_modules",

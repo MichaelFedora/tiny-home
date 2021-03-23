@@ -3,23 +3,20 @@ import { json, Request, Response, NextFunction, Router } from 'express';
 
 import { wrapAsync, handleError, MalformedError, NotFoundError, User, AuthDB, NotAllowedError, validateUserSession } from 'tiny-host-common';
 
-import { AppHandshake, Config } from './types';
+import { AppHandshake, Config } from './home-types';
 import { hash } from './util';
 import { validateAppSession } from './middleware';
 import { HomeDB } from './home-db';
+import axios from 'axios';
 
 export class HomeApi {
 
   private _router: Router;
   public get router() { return this._router; }
 
-  constructor(config: Config & {
-      stores: readonly { name: string, url: string }[],
-      dbs: readonly { name: string, url: string }[]
-    },
+  constructor(config: Config,
     db: HomeDB,
     getUser: (id: string) => Promise<User>,
-    getSession: (type: 'store' | 'db', url: string, user: User, scopes: readonly string[], appSession: string) => Promise<string>,
     userSessionValidator: (req: Request, res: Response, next: NextFunction) => void,
     router = Router(),
     errorHandler = handleError) {
@@ -64,7 +61,7 @@ export class HomeApi {
       const secret = await hash(handshake.app, String(req.body.secret));
       const scopes = handshake.scopes.split(',');
 
-      let app = await db.getAppFromCombo(handshake.app, secret);
+      let app = await db.getAppFromCombo(handshake.user, handshake.app, secret, true);
       if(!app) {
         const info = {
           app: handshake.app,
@@ -75,11 +72,22 @@ export class HomeApi {
         };
 
         if(handshake.store)
-          info.store = handshake.store;
+          info.store = { ...handshake.store, scopes: handshake.fileScopes || undefined };
         if(handshake.db)
-          info.db = handshake.db;
+          info.db = { ...handshake.db, scopes: handshake.dbScopes || undefined };
 
         app = await db.getApp(await db.addApp(info));
+      } else if(
+        (Boolean(app.store) !== Boolean(handshake.store) || JSON.stringify(app.store) !== JSON.stringify({ ...handshake.store, scopes: handshake.fileScopes || undefined })) ||
+        (Boolean(app.db) !== Boolean(handshake.db) || JSON.stringify(app.db) !== JSON.stringify({ ...handshake.db, scopes: handshake.dbScopes || undefined }))) {
+
+        app = {
+          ...app,
+          store: handshake.store ? { ...handshake.store, scopes: handshake.fileScopes || undefined } as any : null,
+          db: handshake.db ? { ...handshake.db, scopes: handshake.dbScopes || undefined } as any : null
+        };
+
+        await db.putApp(app.id, app);
       }
 
       const user = await getUser(handshake.user);
@@ -101,28 +109,50 @@ export class HomeApi {
       if(scopes.includes('store')) {
         if(!app.store)
           sessions.store = null;
-        else if(app.store.type === 'custom')
-          sessions.store = app.store;
-        else {
+        else if(app.store.type === 'local') {
           sessions.store = {
             type: 'local',
-            url: app.store.url,
-            session: await getSession('store', app.store.url, user, handshake.fileScopes, session)
-          };
+            url: config.serverOrigin,
+            session
+          }
+        } else if(app.store.type === 'custom')
+          sessions.store = app.store;
+        else { // key
+          const masterkey = await db.getMasterKey(app.store.key);
+          if(!masterkey)
+            throw new NotFoundError('No masterkey found for id ' + app.store.key + '!');
+
+          const sess = await axios.post(masterkey.url + '/auth/generate-session?key=' + masterkey.key + '&scopes=' + JSON.stringify(app.store.scopes)).then(res => res.data).catch(e => { throw new Error('Error getting session: ' + String(e.message || e)); });
+          sessions.store = {
+            type: 'key',
+            url: masterkey.url,
+            session: sess
+          }
         }
       }
 
       if(scopes.includes('db')) {
         if(!app.db)
           sessions.db = null;
-        else if(app.db.type === 'custom')
-          sessions.db = app.db;
-        else {
+        else if(app.db.type === 'local') {
           sessions.db = {
             type: 'local',
-            url: app.db.url,
-            session: await getSession('db', app.store.url, user, handshake.dbScopes, session)
-          };
+            url: config.serverOrigin,
+            session
+          }
+        } else if(app.db.type === 'custom')
+          sessions.db = app.db;
+        else {
+          const masterkey = await db.getMasterKey(app.db.key);
+          if(!masterkey)
+            throw new NotFoundError('No masterkey found for id ' + app.db.key + '!');
+
+          const sess = await axios.post(masterkey.url + '/auth/generate-session?key=' + masterkey.key + '&scopes=' + JSON.stringify(app.db.scopes)).then(res => res.data).catch(e => { throw new Error('Error getting session: ' + String(e.message || e)); });
+          sessions.db = {
+            type: 'key',
+            url: masterkey.url,
+            session: sess
+          }
         }
       }
 
@@ -139,8 +169,9 @@ export class HomeApi {
         !req.query.redirect || typeof req.query.redirect !== 'string' ||
         // !(new RegExp('^\w+://(\w+\.)*' + req.query.app, 'i').test(req.query.redirect)) ||
         !req.query.scopes || typeof req.query.scopes !== 'string' ||
-        !(!req.query.fileScopes || typeof req.query.fileScopes === 'string'))
-        throw new MalformedError('Must have ?app={app}&redirect={url}&scopes={scopes}<&fileScopes=["/scopes"]> query.');
+        !(!req.query.fileScopes || typeof req.query.fileScopes === 'string') ||
+        !(!req.query.dbScopes || typeof req.query.dbScopes === 'string'))
+        throw new MalformedError('Must have ?app={app}&redirect={url}&scopes={scopes}<&fileScopes=["/scopes"]><&dbScopes=["scope.scopes"]> query.');
 
       const info = {
         app: req.query.app,
@@ -160,6 +191,15 @@ export class HomeApi {
       } else
         delete info.fileScopes;
 
+      if(req.query.dbScopes) {
+        try {
+          info.dbScopes = JSON.parse(req.query.dbScopes as string);
+        } catch(e) {
+          throw new MalformedError('Could not parse dbScopes query; should be a JSON array.')
+        }
+      } else
+        delete info.dbScopes;
+
       const hsId = await db.addAppHandshake(info);
 
       res.redirect(`/handshake?handshake=${hsId}${req.query.username ? '&username=' + String(req.query.username) : ''}`);
@@ -174,7 +214,7 @@ export class HomeApi {
         throw new NotFoundError('No handshake found with id "' + req.params.id + '"!');
 
 
-      if(req.apphandshake.created + config.handshakeExpTime < Date.now()) {
+      if((req.apphandshake.created + config.handshakeExpTime) < Date.now()) {
         await db.delAppHandshake(req.apphandshake.id);
         throw new NotFoundError('Handshake expired!');
       }
@@ -183,14 +223,23 @@ export class HomeApi {
     }));
 
     handshakeRouter.get('/:id', wrapAsync(async (req, res) => {
+      const masterKeys = await db.getMasterKeysForUser(req.user.id);
+      const stores = masterKeys.filter(k => k.type === 'file').map(k => ({ id: k.id, name: k.name || k.url.replace(/^https?:\/\//, ''), url: k.url }));
+      const dbs = masterKeys.filter(k => k.type === 'db').map(k => ({ id: k.id, name: k.name || k.url.replace(/^https?:\/\//, ''), url: k.url }));
+      if(config.big) {
+        stores.unshift({ id: 'local', name: 'local', url: config.serverOrigin });
+        dbs.unshift({ id: 'local', name: 'local', url: config.serverOrigin });
+      }
+
       res.json({
         app: req.apphandshake.app,
         scopes: req.apphandshake.scopes,
         fileScopes: req.apphandshake.fileScopes || undefined,
+        dbScopes: req.apphandshake.dbScopes || undefined,
 
-        stores: config.stores,
-        dbs: config.dbs,
-      });
+        stores,
+        dbs
+      })
     }));
 
     handshakeRouter.get('/:id/approve', wrapAsync(async (req, res) => {
@@ -205,35 +254,44 @@ export class HomeApi {
       let dbInfo: AppHandshake['db'] = null;
 
       if(req.query.store) {
-        let storeType = String(req.query.store);
+        let queryStore = String(req.query.store);
 
-        if(storeType === 'custom') {
+        if(queryStore === 'local') {
+          storeInfo = { type: 'local' };
+
+        } else if(queryStore === 'custom') {
           if(!req.query.storeUrl || typeof req.query.storeUrl !== 'string' ||
             !req.query.storeSession || typeof req.query.storeSession !== 'string')
             throw new MalformedError('A custom store must also have &storeUrl=.. and &storeSession=.. queries!');
+
           storeInfo = { type: 'custom', url: req.query.storeUrl, session: req.query.storeSession };
+
         } else {
-          const entry = config.stores.find(({ name }) => name === storeType);
-          if(!entry)
-            throw new NotFoundError('Local store not found: ' + storeType);
-          storeInfo = { type: 'local', url: entry.url };
+          const key = await db.getMasterKey(queryStore);
+          if(!key || key.user !== req.user.id || key.type !== 'file')
+            throw new NotFoundError('Master key not found for store: ' + queryStore);
+          storeInfo = { type: 'key', key: key.id };
         }
       }
 
       if(req.query.db) {
-        let dbType = String(req.query.db);
+        let queryDb = String(req.query.db);
 
-        if(dbType === 'custom') {
+        if(queryDb === 'local') {
+          dbInfo = { type: 'local' };
+
+        } else if(queryDb === 'custom') {
           if(!req.query.dbUrl || typeof req.query.dbUrl !== 'string' ||
             !req.query.dbSession || typeof req.query.dbSession !== 'string')
             throw new MalformedError('A custom db must also have &dbUrl=.. and &dbSession=.. queries!');
 
             dbInfo = { type: 'custom', url: String(req.query.dbUrl), session: req.query.dbSession };
+
         } else {
-          const entry = config.dbs.find(({ name }) => name === dbType);
-          if(!entry)
-            throw new NotFoundError('Local db not found: ' + dbType);
-          dbInfo = { type: 'local', url: entry.url };
+          const key = await db.getMasterKey(queryDb);
+          if(!key || key.user !== req.user.id || key.type !== 'db')
+            throw new NotFoundError('Master key not found for db: ' + db);
+          dbInfo = { type: 'key', key: key.id };
         }
       }
 
@@ -250,7 +308,7 @@ export class HomeApi {
         db: dbInfo
       };
 
-      await db.putAppHandshake(req.apphandshake.id, Object.assign(req.apphandshake, info));
+      await db.putAppHandshake(req.apphandshake.id, { ...req.apphandshake, ...info });
 
       res.redirect(req.apphandshake.redirect + '?code=' + code);
     }));
@@ -266,7 +324,11 @@ export class HomeApi {
 
     masterKeyRouter.use(userSessionValidator);
 
-    masterKeyRouter.get('', wrapAsync(async (req, res) => res.json(await db.getMasterKeysForUser(req.user.id))));
+    masterKeyRouter.get('', wrapAsync(async (req, res) => {
+      const keys = await db.getMasterKeysForUser(req.user.id);
+      res.json(keys.map(key => ({ id: key.id, url: key.url, type: key.type })));
+    }));
+
     masterKeyRouter.get('/:id', wrapAsync(async (req, res) => {
       const mk = await db.getMasterKey(req.params.id);
       if(mk.user !== req.user.id)
@@ -284,14 +346,28 @@ export class HomeApi {
 
       // verify?
 
-      await db.addMasterKey({ user: req.user.id, url: req.body.url, key: req.body.key, type: req.body.type });
+      const name = req.body.name || req.body.url.replace(/^https?:\/\//, '');
+      const id = await db.addMasterKey({ user: req.user.id, url: req.body.url, name, key: req.body.key, type: req.body.type });
+
+      res.json(id);
+    }));
+
+    masterKeyRouter.put('/:id', wrapAsync(async (req, res) => {
+      if(!req.body.name)
+        throw new MalformedError('Body should be like so: { name: string }');
+
+      const mk = await db.getMasterKey(req.params.id);
+      if(!mk || mk.user !== req.user.id)
+        throw new NotFoundError('No master key with id ' + req.params.id + ' found!');
+
+      await db.putMasterKey(req.params.id, { ...mk, name: req.body.name });
 
       res.sendStatus(204);
-    }));
+    }))
 
     masterKeyRouter.delete('/:id', wrapAsync(async (req, res) => {
       const mk = await db.getMasterKey(req.params.id);
-      if(mk.user !== req.user.id)
+      if(!mk || mk.user !== req.user.id)
         return res.sendStatus(204);
 
       await db.delMasterKey(req.params.id);
@@ -356,7 +432,7 @@ export class HomeApi {
       if(!appsess || appsess.user !== req.user.id)
         throw new NotAllowedError('Cannot delete an appsession that is not yours, or is nonexistant!');
 
-      await db.delApp(req.params.id);
+      await db.delAppSession(req.params.id);
 
       res.sendStatus(204);
     }), errorHandler('home-appsessions'));

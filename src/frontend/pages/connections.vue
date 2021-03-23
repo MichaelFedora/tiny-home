@@ -12,15 +12,15 @@
     <button class='icon success' @click='addKey'><svg-icon type='mdi' :path='mdiPlus' /></button>
   </h2>
   <div class='masterkeys'>
+    <span class='h4 sub'>id</span>
+    <span class='h4 sub'>name / url</span>
     <span class='h4 sub'>type</span>
-    <span class='h4 sub'>user</span>
-    <span class='h4 sub'>url</span>
     <span class='h4 sub'>options</span>
 
     <template v-for='(mk, i) of masterkeys'>
-      <span :key='"mk-id-" + i'>{{ mk.type }}</span>
-      <span :key='"mk-user-" + i'>{{ mk.user }}</span>
-      <span :key='"mk-name-" + i'>{{ mk.url }}</span>
+      <span :key='"mk-id-" + i'>{{ mk.id }}</span>
+      <span :key='"mk-url-" + i'>{{ mk.name || mk.url }}</span>
+      <span :key='"mk-type-" + i'>{{ mk.type }}</span>
       <div :key='"mk-opts-" + i'>
         <button class='danger' @click='remove("mk", mk)'>remove</button>
       </div>
@@ -38,8 +38,8 @@
 
     <template v-for='(app, i) of apps'>
       <span :key='"app-app-" + i'>{{ app.app }}</span>
-      <span :key='"app-store-" + i'>{{ app.store ? app.store.type + ':' + app.store.url : 'n/a' }}</span>
-      <span :key='"app-db-" + i'>{{ app.db ? app.db.type + ':' + app.db.url : 'n/a' }}</span>
+      <span :key='"app-store-" + i'>{{ app.store ? app.store.type + (app.db.type !== 'local' ? ':' + (app.store.url || app.store.key) : '') : 'n/a' }}</span>
+      <span :key='"app-db-" + i'>{{ app.db ? app.db.type + (app.db.type !== 'local' ? ':' + (app.db.url || app.db.key) : '') : 'n/a' }}</span>
       <div :key='"app-opts-" + i'>
         <button class='danger' @click='remove("app", app)'>remove</button>
       </div>
@@ -60,8 +60,27 @@
         </div>
       </template>
     </template>
+    <template v-if='looseAppSessions.length'>
+      <span style='grid-column: 1 / 5'>app-less "loose" sessions</span>
+      <template v-for='(appsess, j) of looseAppSessions'>
+        <span :key='"app-sess-created-loose-" + j'>{{ (new Date(appsess.created)).toLocaleString() }}</span>
+        <div class='scopes' :key='"app-sess-file-scopes-loose-" + j'>
+          <template v-if='appsess.fileScopes'>
+          <span v-for='(scope, j) of appsess.fileScopes' :key='"app-sess-file-scope-loose-" + j' class='tag'>{{scope}}</span>
+          </template>
+        </div>
+        <div class='scopes' :key='"app-sess-db-scopes-loose-" + j'>
+          <template v-if='appsess.dbScopes'>
+          <span v-for='(scope, j) of appsess.dbScopes' :key='"app-sess-db-scope-loose-" + j' class='tag'>{{scope}}</span>
+          </template>
+        </div>
+        <div :key='"app-sess-opts-loose-" + j'>
+          <button class='danger' @click='revoke("as", appsess.id)'>revoke</button>
+        </div>
+      </template>
+    </template>
 
-    <span v-if='!sessions.length' style='grid-column: 1 / 5'>Nothing here...</span>
+    <span v-if='!apps.length' style='grid-column: 1 / 5'>Nothing here...</span>
   </div>
   <h2 class='sub'>sessions</h2>
   <div class='sessions'>
@@ -107,6 +126,7 @@ export default Vue.extend({
     mdiArrowLeft, mdiPlus,
     masterkeys: [],
     apps: [],
+    looseAppSessions: [],
     sessions: [],
   }; },
   mounted() { this.refresh(); },
@@ -115,8 +135,17 @@ export default Vue.extend({
       if(this.working) return;
       this.working = true;
 
+      await localApi.auth.getMasterKeys().then(res => this.masterkeys = res, () => this.masterkeys = null);
       await localApi.auth.getSessions().then(res => this.sessions = res, () => { });
-      await localApi.home.getApps().then(res => this.apps = res, () => { });
+
+      let apps: {
+        id: string;
+        app: string;
+        store?: any;
+        db?: any;
+        sessions?: any[];
+      }[] = [];
+      await localApi.home.getApps().then(res => apps = res, () => { });
       const appsessions: {
         id: string;
         app: string;
@@ -124,19 +153,25 @@ export default Vue.extend({
         fileScopes: string[];
         created: number;
       }[] = (await localApi.home.getAppSessions().catch(() => null)) || [];
-      await localApi.auth.getMasterKeys().then(res => this.masterkeys = res, () => this.masterkeys = null);
+
+      const looseSessions = [];
 
       for(const sess of appsessions) {
-        const app = this.apps.find(a => a.id === sess.app);
+        const app = apps.find(a => a.id === sess.app);
 
-        if(!app)
+        if(!app) {
+          looseSessions.push(sess);
           continue;
+        }
 
         if(!app.sessions)
           app.sessions = [];
 
         app.sessions.push(sess);
       }
+
+      this.apps = apps;
+      this.looseAppSessions = looseSessions;
 
       this.working = false;
     },
@@ -148,13 +183,28 @@ export default Vue.extend({
         + 'you can use it when authorizing with apps. Be careful -- this key '
         + 'can be used to access all of your data!',
         type: 'warning',
-        prompt: { required: true, placeholder: 'key' }
+        prompt: { required: true, placeholder: 'share key' }
       });
 
       if(!key)
         return;
+
+      // parse it
+      let parsed: { key: string, url: string, type: string };
+      try {
+        parsed = JSON.parse(atob(key));
+      } catch(e) {
+        openModal({
+          title: 'Failed to Parse',
+          message: 'Failed to parse the given share key. It should be a (sometimes long) '
+          + 'string of alphanumeric characters.',
+          type: 'danger',
+          alert: true
+        });
+      }
+
       // add it
-      const mk = await localApi.auth.addMasterKey(key).catch(() => null);
+      const mk = await localApi.auth.addMasterKey(parsed).catch(() => null);
       if(!mk)
         return;
 
@@ -201,7 +251,7 @@ export default Vue.extend({
         case 's':
           await localApi.auth.delSession(id).catch(() => { });
         case 'as':
-          // await localApi.home.delAppSession(id).catch(() => { });
+          await localApi.home.delAppSession(id).catch(() => { });
       }
       return this.refresh();
     }
@@ -225,6 +275,7 @@ export default Vue.extend({
     display: grid;
 
     grid-template-columns: auto auto auto 1fr;
+
     grid-auto-rows: auto;
     gap: 1.5em;
     align-items: baseline;

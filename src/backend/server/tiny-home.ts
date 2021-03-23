@@ -63,11 +63,13 @@ try {
   app.use(helmet.contentSecurityPolicy({
     directives: production ? {
       defaultSrc: ['\'self\''],
+      connectSrc: ['http:', 'https:'],
       styleSrc: ['\'self\''],
       scriptSrc: ['\'self\''],
       imgSrc: ['\'self\'', 'data:']
     } : {
       defaultSrc: ['\'self\''],
+      connectSrc: ['http:', 'https:'],
       styleSrc: ['\'self\'', '\'unsafe-inline\''],
       scriptSrc: ['\'self\'', '\'unsafe-eval\''],
       imgSrc: ['\'self\'', 'data:']

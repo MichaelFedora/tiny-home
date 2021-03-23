@@ -49,11 +49,11 @@ export default Vue.extend({
     fileScopes: [] as string[],
     dbScopes: [] as string[],
 
-    stores: [] as  { name: string, url: string }[],
-    dbs: [] as { name: string, url: string }[],
+    stores: [] as  { id: string, name: string, url: string }[],
+    dbs: [] as { id: string, name: string, url: string }[],
 
-    store: null as { name: string, url: string },
-    db: null as { name: string, url: string }
+    store: null as { id: string, name: string, url: string },
+    db: null as { id: string, name: string, url: string }
   }; },
   computed: {
     handshake() { return String(this.$route.query.handshake); },
@@ -68,7 +68,7 @@ export default Vue.extend({
     this.app = appInfo.app || '{broken}';
     this.scopes = appInfo.scopes ? appInfo.scopes.split(',') : [];
     this.fileScopes = appInfo.fileScopes || [];
-    this.fileScopes = appInfo.dbScopes || [];
+    this.dbScopes = appInfo.dbScopes || [];
     this.stores = appInfo.stores || [];
     this.dbs = appInfo.dbs || [];
 
@@ -86,9 +86,9 @@ export default Vue.extend({
         const info = { } as { store?: string, db?: string };
 
         if(this.scopes.includes('store'))
-          info.store = this.store.name;
+          info.store = this.store.id;
         if(this.scopes.includes('db'))
-          info.db = this.db.name;
+          info.db = this.db.id;
 
         localApi.auth.approveHandshake(this.handshake, info);
       }

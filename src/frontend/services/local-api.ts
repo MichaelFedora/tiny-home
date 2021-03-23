@@ -57,7 +57,7 @@ class LocalApi {
       await axios.post(`${url}/auth/change-pass?sid=${dataBus.session}`, { password, newpass }).catch(e => { handleError(e); throw e; });
     },
 
-    async getHandshakeInfo(handshake: string): Promise<{ app: string; scopes: string; fileScopes?: string[]; dbScopes?: string[]; stores: { name: string, url: string }[]; dbs: { name: string, url: string }[] }> {
+    async getHandshakeInfo(handshake: string): Promise<{ app: string; scopes: string; fileScopes?: string[]; dbScopes?: string[]; stores: {id: string, name: string, url: string }[]; dbs: { id: string, name: string, url: string }[] }> {
       return axios.get(`${url}/auth/handshake/${handshake}?sid=${dataBus.session}`).then(res => res.data, handleError);
     },
 
@@ -73,8 +73,8 @@ class LocalApi {
       return axios.get(`${url}/auth/master-key?sid=${dataBus.session}`).then(res => res.data, e => { handleError(e); throw e; });
     },
 
-    async addMasterKey(name: string): Promise<string> {
-      return axios.post(`${url}/auth/master-key?name=${name}&sid=${dataBus.session}`).then(
+    async addMasterKey(info: { key: string, url: string, type: string }): Promise<string> {
+      return axios.post(`${url}/auth/master-key?sid=${dataBus.session}`, info).then(
         res => res.data,
         e => { handleError(e); throw e; });
     },
