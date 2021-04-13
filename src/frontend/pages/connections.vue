@@ -115,7 +115,7 @@ import localApi from 'services/local-api';
 
 import { openModal } from 'utility';
 
-import { MasterKey } from 'tiny-host-common'
+import { MasterKey } from 'tiny-host-common';
 
 export default Vue.extend({
   name: 'tiny-connections',
