@@ -1,9 +1,10 @@
 import axios, { AxiosError } from 'axios';
-import { handleError as modalHandleError } from 'utility';
-import dataBus from 'services/data-bus';
-import router from 'router';
+import { handleError as modalHandleError } from '@/utility';
+import dataBus from '@/services/data-bus';
+import router from '@/router';
 
-const url = location.origin;
+const envApiUrl = import.meta.env.VITE_API_URL;
+const url = envApiUrl || location.origin;
 
 function handleError(e: AxiosError) {
   if(!e)
@@ -12,8 +13,8 @@ function handleError(e: AxiosError) {
   if(e.response?.status === 403 && e.response?.data?.message === 'No session found!')
     dataBus.clear();
 
-  if(!dataBus.session && !/^\/login/.test(router.currentRoute.path))
-    router.push(`/login?goto=${router.currentRoute.fullPath}`);
+  if(!dataBus.session && !/^\/login/.test(router.currentRoute.value.path))
+    router.push(`/login?goto=${router.currentRoute.value.fullPath}`);
 
   return modalHandleError(e);
 }

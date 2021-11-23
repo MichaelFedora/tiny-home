@@ -57,7 +57,7 @@ class Api {
       const storeSessionValidator = validateUserOrAppSession(db.home, getUser, getSession, 'file');
       const dbSessionValidator = validateUserOrAppSession(db.home, getUser, getSession, 'db');
 
-      this._diskApi = new DiskApi(config, db.disk, storeSessionValidator, this.router);
+      this._diskApi = new DiskApi(config, db.disk, getUser, storeSessionValidator, this.router);
       this._levelApi = new LevelApi(db.level, dbSessionValidator, this.router);
     }
 

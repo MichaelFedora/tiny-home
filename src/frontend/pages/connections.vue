@@ -17,11 +17,11 @@
     <span class='h4 sub'>type</span>
     <span class='h4 sub'>options</span>
 
-    <template v-for='(mk, i) of masterkeys'>
-      <span :key='"mk-id-" + i'>{{ mk.id }}</span>
-      <span :key='"mk-url-" + i'>{{ mk.name || mk.url }}</span>
-      <span :key='"mk-type-" + i'>{{ mk.type }}</span>
-      <div :key='"mk-opts-" + i'>
+    <template v-for='mk of masterkeys'>
+      <span>{{ mk.id }}</span>
+      <span>{{ mk.name || mk.url }}</span>
+      <span>{{ mk.type }}</span>
+      <div>
         <button class='danger' @click='remove("mk", mk)'>remove</button>
       </div>
     </template>
@@ -36,45 +36,45 @@
     <span class='h4 sub'>db (scopes)</span>
     <span class='h4 sub'>options</span>
 
-    <template v-for='(app, i) of apps'>
-      <span :key='"app-app-" + i'>{{ app.app }}</span>
-      <span :key='"app-store-" + i'>{{ app.store ? app.store.type + (app.store.type !== 'local' ? ':' + (app.store.url || app.store.key) : '') : 'n/a' }}</span>
-      <span :key='"app-db-" + i'>{{ app.db ? app.db.type + (app.db.type !== 'local' ? ':' + (app.db.url || app.db.key) : '') : 'n/a' }}</span>
-      <div :key='"app-opts-" + i'>
+    <template v-for='app of apps'>
+      <span>{{ app.app }}</span>
+      <span>{{ app.store ? app.store.type + (app.store.type !== 'local' ? ':' + (app.store.url || app.store.key) : '') : 'n/a' }}</span>
+      <span>{{ app.db ? app.db.type + (app.db.type !== 'local' ? ':' + (app.db.url || app.db.key) : '') : 'n/a' }}</span>
+      <div>
         <button class='danger' @click='remove("app", app)'>remove</button>
       </div>
-      <template v-for='(appsess, j) of app.sessions'>
-        <span :key='"app-sess-created-" + i + "-" + j'>{{ (new Date(appsess.created)).toLocaleString() }}</span>
-        <div class='scopes' :key='"app-sess-file-scopes-" + i + "-" + j'>
+      <template v-for='appsess of app.sessions'>
+        <span>{{ (new Date(appsess.created)).toLocaleString() }}</span>
+        <div class='scopes'>
           <template v-if='appsess.fileScopes'>
-          <span v-for='(scope, j) of appsess.fileScopes' :key='"app-sess-file-scope-" + i + "-" + j' class='tag'>{{scope}}</span>
+          <span v-for='scope of appsess.fileScopes' class='tag'>{{scope}}</span>
           </template>
         </div>
-        <div class='scopes' :key='"app-sess-db-scopes-" + i + "-" + j'>
+        <div class='scopes'>
           <template v-if='appsess.dbScopes'>
-          <span v-for='(scope, j) of appsess.dbScopes' :key='"app-sess-db-scope-" + i + "-" + j' class='tag'>{{scope}}</span>
+          <span v-for='scope of appsess.dbScopes' class='tag'>{{scope}}</span>
           </template>
         </div>
-        <div :key='"app-sess-opts-" + i + "-" + j'>
+        <div>
           <button class='danger' @click='revoke("as", appsess.id)'>revoke</button>
         </div>
       </template>
     </template>
     <template v-if='looseAppSessions.length'>
       <span style='grid-column: 1 / 5'>app-less "loose" sessions</span>
-      <template v-for='(appsess, j) of looseAppSessions'>
-        <span :key='"app-sess-created-loose-" + j'>{{ (new Date(appsess.created)).toLocaleString() }}</span>
-        <div class='scopes' :key='"app-sess-file-scopes-loose-" + j'>
+      <template v-for='appsess of looseAppSessions'>
+        <span>{{ (new Date(appsess.created)).toLocaleString() }}</span>
+        <div class='scopes'>
           <template v-if='appsess.fileScopes'>
-          <span v-for='(scope, j) of appsess.fileScopes' :key='"app-sess-file-scope-loose-" + j' class='tag'>{{scope}}</span>
+          <span v-for='scope of appsess.fileScopes' class='tag'>{{scope}}</span>
           </template>
         </div>
-        <div class='scopes' :key='"app-sess-db-scopes-loose-" + j'>
+        <div class='scopes'>
           <template v-if='appsess.dbScopes'>
-          <span v-for='(scope, j) of appsess.dbScopes' :key='"app-sess-db-scope-loose-" + j' class='tag'>{{scope}}</span>
+          <span v-for='scope of appsess.dbScopes' class='tag'>{{scope}}</span>
           </template>
         </div>
-        <div :key='"app-sess-opts-loose-" + j'>
+        <div>
           <button class='danger' @click='revoke("as", appsess.id)'>revoke</button>
         </div>
       </template>
@@ -89,13 +89,13 @@
     <span class='h4 sub'>created</span>
     <span class='h4 sub'>options</span>
 
-    <template v-for='(sess, i) of sessions'>
-      <span :key='"sess-id-" + i'>{{ sess.id }}</span>
-      <div class='scopes' :key='"sess-scopes-" + i'>
-        <span v-for='(scope, j) of sess.scopes' :key='"sess-scope-" + i + "-" + j' class='tag'>{{scope}}</span>
+    <template v-for='sess of sessions'>
+      <span>{{ sess.id }}</span>
+      <div class='scopes'>
+        <span v-for='scope of sess.scopes' class='tag'>{{scope}}</span>
       </div>
-      <span :key='"sess-created-" + i'>{{ (new Date(sess.created)).toLocaleString() }}</span>
-      <div :key='"sess-opts-" + i'>
+      <span>{{ (new Date(sess.created)).toLocaleString() }}</span>
+      <div>
         <button class='danger' @click='revoke("s", sess.id)'>revoke</button>
       </div>
     </template>
@@ -105,38 +105,38 @@
 </div>
 </template>
 <script lang='ts'>
-import Vue from 'vue';
+import { defineComponent, reactive, toRefs } from 'vue';
 //@ts-ignore
 import SvgIcon from '@jamescoyle/vue-icon';
 import { mdiArrowLeft, mdiPlus } from '@mdi/js';
 
-import dataBus from 'services/data-bus';
-import localApi from 'services/local-api';
+import dataBus from '@/services/data-bus';
+import localApi from '@/services/local-api';
 
-import { openModal } from 'utility';
+import modals from '@/services/modals';
 
 import { MasterKey } from 'tiny-host-common';
 
-export default Vue.extend({
+export default defineComponent({
   name: 'tiny-connections',
   components: { SvgIcon },
-  data() { return {
-    working: false,
-    username: dataBus.user?.username || '???',
-    mdiArrowLeft, mdiPlus,
-    masterkeys: [],
-    apps: [],
-    looseAppSessions: [],
-    sessions: [],
-  }; },
-  mounted() { this.refresh(); },
-  methods: {
-    async refresh() {
-      if(this.working) return;
-      this.working = true;
+  setup(args, options) {
+    const data = reactive({
+      working: false,
+      username: dataBus.user?.username || '???',
+      mdiArrowLeft, mdiPlus,
+      masterkeys: [],
+      apps: [],
+      looseAppSessions: [],
+      sessions: [],
+    });
 
-      await localApi.auth.getMasterKeys().then(res => this.masterkeys = res, () => this.masterkeys = null);
-      await localApi.auth.getSessions().then(res => this.sessions = res, () => { });
+    async function refresh() {
+      if(data.working) return;
+      data.working = true;
+
+      await localApi.auth.getMasterKeys().then(res => data.masterkeys = res, () => data.masterkeys = null);
+      await localApi.auth.getSessions().then(res => data.sessions = res, () => { });
 
       let apps: {
         id: string;
@@ -170,96 +170,102 @@ export default Vue.extend({
         app.sessions.push(sess);
       }
 
-      this.apps = apps;
-      this.looseAppSessions = looseSessions;
+      data.apps = apps;
+      data.looseAppSessions = looseSessions;
 
-      this.working = false;
-    },
-    async addKey() {
-      // name it
-      const key = await openModal({
-        title: 'Add Remote Node',
-        message: 'A remote file/db node can be added via a master key, so that '
-        + 'you can use it when authorizing with apps. Be careful -- this key '
-        + 'can be used to access all of your data!',
-        type: 'warning',
-        prompt: { required: true, placeholder: 'share key' }
-      });
+      data.working = false;
+    };
 
-      if(!key)
-        return;
+    return {
+      ...toRefs(data),
 
-      // parse it
-      let parsed: { key: string, url: string, type: string };
-      try {
-        parsed = JSON.parse(atob(key));
-      } catch(e) {
-        openModal({
-          title: 'Failed to Parse',
-          message: 'Failed to parse the given share key. It should be a (sometimes long) '
-          + 'string of alphanumeric characters.',
-          type: 'danger',
+      async addKey() {
+        // name it
+        const key = await modals.open({
+          title: 'Add Remote Node',
+          message: 'A remote file/db node can be added via a master key, so that '
+          + 'you can use it when authorizing with apps. Be careful -- this key '
+          + 'can be used to access all of your data!',
+          type: 'warning',
+          prompt: { required: true, placeholder: 'share key' }
+        });
+
+        if(!key)
+          return;
+
+        // parse it
+        let parsed: { key: string, url: string, type: string };
+        try {
+          parsed = JSON.parse(atob(key));
+        } catch(e) {
+          modals.open({
+            title: 'Failed to Parse',
+            message: 'Failed to parse the given share key. It should be a (sometimes long) '
+            + 'string of alphanumeric characters.',
+            type: 'danger',
+            alert: true
+          });
+        }
+
+        // add it
+        const mk = await localApi.auth.addMasterKey(parsed).catch(() => null);
+        if(!mk)
+          return;
+
+        //show it
+        modals.open({
+          title: 'Remote Node Added',
+          message: 'This node can now be used with authorizing apps. It can be '
+          + 'removed at any time.',
+          type: 'success',
           alert: true
         });
+
+        refresh();
+      },
+
+      async remove(type: 'mk' | 'app', item: Partial<MasterKey & { id: string, app: string }>) {
+        if(type === 'mk') {
+          const choice = await modals.open({
+            title: 'Remove Remote Node',
+            message: 'This cannot be undone. It could also break any apps that currently use this node. Are you sure?',
+            type: 'danger'
+          });
+          if(!choice)
+            return;
+
+          await localApi.auth.delMasterKey(item.id);
+
+          refresh();
+        } else if(type === 'app') {
+          const choice = await modals.open({
+            title: 'Remove App "' + item.app + '"',
+            message: 'This removes any preferences and permissions you have saved for this applications, including storage scopes. Are you sure?',
+            type: 'danger'
+          });
+          if(!choice)
+            return;
+
+          await localApi.home.delApp(item.id);
+
+          refresh();
+        }
+      },
+      async revoke(type: 's' | 'as', id: string) {
+        switch(type) {
+          case 's':
+            await localApi.auth.delSession(id).catch(() => { });
+          case 'as':
+            await localApi.home.delAppSession(id).catch(() => { });
+        }
+        return refresh();
       }
-
-      // add it
-      const mk = await localApi.auth.addMasterKey(parsed).catch(() => null);
-      if(!mk)
-        return;
-
-      //show it
-      openModal({
-        title: 'Remote Node Added',
-        message: 'This node can now be used with authorizing apps. It can be '
-        + 'removed at any time.',
-        type: 'success',
-        alert: true
-      });
-
-      this.refresh();
-    },
-    async remove(type: 'mk' | 'app', item: Partial<MasterKey & { id: string, app: string }>) {
-      if(type === 'mk') {
-        const choice = await openModal({
-          title: 'Remove Remote Node',
-          message: 'This cannot be undone. It could also break any apps that currently use this node. Are you sure?',
-          type: 'danger'
-        });
-        if(!choice)
-          return;
-
-        await localApi.auth.delMasterKey(item.id);
-
-        this.refresh();
-      } else if(type === 'app') {
-        const choice = await openModal({
-          title: 'Remove App "' + item.app + '"',
-          message: 'This removes any preferences and permissions you have saved for this applications, including storage scopes. Are you sure?',
-          type: 'danger'
-        });
-        if(!choice)
-          return;
-
-        await localApi.home.delApp(item.id);
-
-        this.refresh();
-      }
-    },
-    async revoke(type: 's' | 'as', id: string) {
-      switch(type) {
-        case 's':
-          await localApi.auth.delSession(id).catch(() => { });
-        case 'as':
-          await localApi.home.delAppSession(id).catch(() => { });
-      }
-      return this.refresh();
     }
   }
 });
 </script>
 <style lang='scss'>
-@import '~tiny-host-common/src/web/colors.scss';
+@import 'tiny-host-common/src/web/colors.scss';
 
 #tiny-connections {
 

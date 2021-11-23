@@ -36,64 +36,73 @@
 </div>
 </template>
 <script lang='ts'>
-import Vue from 'vue';
-import localApi from 'services/local-api';
+import { defineComponent, reactive, computed, toRefs, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 
-export default Vue.extend({
+import localApi from '@/services/local-api';
+
+export default defineComponent({
   name: 'tiny-handshake',
-  data() { return {
-    working: false,
+  setup(args, context) {
+    const route = useRoute();
+    const handshake = computed(() => route.query.handshake as string);
 
-    app: '',
-    scopes: [] as string[],
-    fileScopes: [] as string[],
-    dbScopes: [] as string[],
+    const data = reactive({
+      working: false,
 
-    stores: [] as  { id: string, name: string, url: string }[],
-    dbs: [] as { id: string, name: string, url: string }[],
+      app: '',
+      scopes: [] as string[],
+      fileScopes: [] as string[],
+      dbScopes: [] as string[],
 
-    store: null as { id: string, name: string, url: string },
-    db: null as { id: string, name: string, url: string }
-  }; },
-  computed: {
-    handshake() { return String(this.$route.query.handshake); },
-  },
-  async mounted() {
-    if(!this.handshake)
-      return;
+      stores: [] as  { id: string, name: string, url: string }[],
+      dbs: [] as { id: string, name: string, url: string }[],
 
-    this.working = true;
+      store: null as { id: string, name: string, url: string },
+      db: null as { id: string, name: string, url: string }
+    });
 
-    const appInfo = await localApi.auth.getHandshakeInfo(this.handshake).catch(() => null) || { };
-    this.app = appInfo.app || '{broken}';
-    this.scopes = appInfo.scopes ? appInfo.scopes.split(',') : [];
-    this.fileScopes = appInfo.fileScopes || [];
-    this.dbScopes = appInfo.dbScopes || [];
-    this.stores = appInfo.stores || [];
-    this.dbs = appInfo.dbs || [];
+    onMounted(async () => {
+      if(!handshake.value)
+        return;
 
-    this.store = this.stores[0] || null;
-    this.db = this.dbs[0] || null;
+      data.working = true;
 
-    this.working = false;
-  },
-  methods: {
-    cancel() {
-      localApi.auth.cancelHandshake(this.handshake);
-    },
-    approve() {
-      if(this.handshake && this.app && (!this.scopes.includes('store') || this.store) && (!this.scopes.includes('db') || this.db)) {
-        const info = { } as { store?: string, db?: string };
+      const appInfo = await localApi.auth.getHandshakeInfo(handshake.value).catch(() => null) || { };
+      data.app = appInfo.app || '{broken}';
+      data.scopes = appInfo.scopes ? appInfo.scopes.split(',') : [];
+      data.fileScopes = appInfo.fileScopes || [];
+      data.dbScopes = appInfo.dbScopes || [];
+      data.stores = appInfo.stores || [];
+      data.dbs = appInfo.dbs || [];
 
-        if(this.scopes.includes('store'))
-          info.store = this.store.id;
-        if(this.scopes.includes('db'))
-          info.db = this.db.id;
+      data.store = data.stores[0] || null;
+      data.db = data.dbs[0] || null;
 
-        localApi.auth.approveHandshake(this.handshake, info);
+      data.working = false;
+    });
+
+    return {
+      handshake,
+      ...toRefs(data),
+
+      cancel() {
+        localApi.auth.cancelHandshake(handshake.value);
+      },
+      approve() {
+        if(handshake.value && data.app && (!data.scopes.includes('store') || data.store) && (!data.scopes.includes('db') || data.db)) {
+          const info = { } as { store?: string, db?: string };
+
+          if(data.scopes.includes('store'))
+            info.store = data.store.id;
+          if(data.scopes.includes('db'))
+            info.db = data.db.id;
+
+          localApi.auth.approveHandshake(handshake.value, info);
+        }
       }
     }
-  }
+  },
 });
 </script>
 <style lang='scss'>

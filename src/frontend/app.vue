@@ -1,39 +1,54 @@
 <template>
-<div id='app'>
-  <h3>tiny home<template v-if='loggedIn'> - {{username}}</template></h3>
-  <router-view />
-</div>
+<h3>tiny home<template v-if='loggedIn'> - {{username}}</template></h3>
+<router-view />
+<Modal
+  v-for='(modal, i) of modalList'
+  :key='"modal-" + i'
+  v-bind='modal'
+  @destroy='destroyModal(i)'
+  @confirm='modal.onConfirm'
+  @cancel='modal.onCancel'
+/>
 </template>
 <script lang='ts'>
-import Vue from 'vue';
-import dataBus from 'services/data-bus';
+import { defineComponent, ref, toRef, watch } from 'vue';
+import { useRoute } from 'vue-router';
+import Modal from '@/components/modal.vue';
+import dataBus from '@/services/data-bus';
+import { appSetup } from '@/services/modals';
 
-export default Vue.extend({
-  name: 'app',
-  data() { return {
-    loggedIn: Boolean(dataBus.session),
-    username: dataBus.user?.username || '',
-    page: this.$route.name || ''
-  }; },
-  watch: {
-    $route(n, o) {
-      if(n.path !== o.path) {
-        if(!/^\/login/.test(n.path)) {
-          if(!this.loggedIn)
-            this.loggedIn = Boolean(dataBus.session);
-          if(!this.username)
-            this.username = dataBus.user?.username;
+export default defineComponent({
+  components: { Modal },
+  setup() {
+    const route = useRoute();
+
+    const loggedIn = ref(Boolean(dataBus.session));
+    const username = ref(dataBus.user?.username || '');
+    const page = toRef(route, 'name');
+
+    watch(() => route.path, (n, o) => {
+      if(n !== o) {
+        if(!/^\/login/.test(n)) {
+          if(!loggedIn.value)
+            loggedIn.value = Boolean(dataBus.session);
+          if(!username.value)
+            username.value = dataBus.user?.username;
         } else {
-          if(this.loggedIn)
-            this.loggedIn = Boolean(dataBus.session);
-          if(this.username)
-            this.username = dataBus.user?.username;
+          if(loggedIn.value)
+            loggedIn.value = Boolean(dataBus.session);
+          if(username.value)
+            username.value = dataBus.user?.username;
         }
-
-        this.page = n.name;
       }
+    })
+
+    return {
+      loggedIn,
+      username,
+
+      ...appSetup()
     }
-  },
+  }
 });
 </script>
 <style lang='scss'>

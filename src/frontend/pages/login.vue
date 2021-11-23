@@ -1,9 +1,9 @@
 <template>
 <div id='tiny-login'>
-  <h1>login</h1>
+  <h1>{{ registering ? "register" : "login" }}</h1>
   <div class='form'>
     <div class='field'>
-      <input placeholder='username' ref='username' v-model='username' />
+      <input placeholder='username' ref='usernameEl' v-model='username' />
     </div>
     <div class='field'>
       <input placeholder='password' type='password' v-model='password' :pattern='registering ? "\\w{4,}" : null' @keyup.enter='registering ? null : login()' />
@@ -28,80 +28,99 @@
 </div>
 </template>
 <script lang='ts'>
-import Vue from 'vue';
-import localApi from 'services/local-api';
-import dataBus from 'services/data-bus';
-import { openModal } from 'utility';
+import { defineComponent, reactive, toRefs, watch, ref, computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import localApi from '@/services/local-api';
+import dataBus from '@/services/data-bus';
+import modals from '@/services/modals';
 
-export default Vue.extend({
+export default defineComponent({
   name: 'tiny-login',
 
-  data() { return {
-    registering: false,
-    canRegister: true,
-    working: false,
+  setup(args, context) {
+    const route = useRoute();
+    const router = useRouter();
 
-    username: '',
-    password: '',
-    confirmpass: ''
-  }; },
-  watch: {
-    registering(n, o) {
+    const data = reactive({
+      registering: false,
+      canRegister: true,
+      working: false,
+
+      username: '',
+      password: '',
+      confirmpass: ''
+    });
+
+    const usernameEl = ref<HTMLInputElement>(null);
+
+    watch(() => data.registering, (n, o) => {
       if(!n === !o) return;
-      this.username = '';
-      this.password = '';
-      this.confirmpass = '';
-    }
-  },
-  computed: {
-    valid(): boolean { return this.username && this.password && /\w{4,}/.test(this.password) && (!this.registering || this.confirmpass === this.password); }
-  },
-  mounted() {
-    if(this.$route.query.username)
-      this.username = '' + this.$route.query.username;
-    (this.$refs.username as HTMLInputElement)?.focus();
-  },
-  methods: {
-    async register() {
-      if(this.working || !this.valid) return;
-      this.working = true;
+      data.username = '';
+      data.password = '';
+      data.confirmpass = '';
+    });
 
-      const success = await localApi.auth.register(this.username, this.password).then(() => true, () => false);
+    const valid = computed(() => Boolean(
+      data.username &&
+      data.password &&
+      /\w{4,}/.test(data.password) &&
+      (!data.registering ||
+        data.confirmpass === data.password)
+    ));
+
+    onMounted(() => {
+      if(route.query.username)
+        data.username = '' + route.query.username;
+      usernameEl.value?.focus();
+    });
+
+    async function register() {
+      if(data.working || !valid.value) return;
+      data.working = true;
+
+      const success = await localApi.auth.register(data.username, data.password).then(() => true, () => false);
       if(success) {
-        await openModal({
+        await modals.open({
           title: 'Registered',
-          message: 'Registered as "' + this.username + '"!',
+          message: 'Registered as "' + data.username + '"!',
           type: 'success',
           alert: true
         });
 
-        this.registering = false;
+        data.registering = false;
       }
 
-      this.working = false;
-    },
+      data.working = false;
+    };
 
-    async login() {
-      if(this.working || !this.username || !this.password) return;
-      this.working = true;
+    async function login() {
+      if(data.working || !data.username || !data.password) return;
+      data.working = true;
 
-      let success = await localApi.auth.login(this.username, this.password).then(() => true, e => false);
+      let success = await localApi.auth.login(data.username, data.password).then(() => true, e => false);
 
       if(!success)
-        (this.$refs.username as HTMLInputElement)?.focus();
+        (usernameEl.value as HTMLInputElement)?.focus();
 
       if(success)
         success = await localApi.getSelf().then(() => true, () => false);
 
       if(success) {
-        if(this.$route.query.goto && !(this.$route.query.goto instanceof Array))
-          this.$router.push(this.$route.query.goto);
-        else
-          this.$router.push('/');
+        if(route.query.goto && !(route.query.goto instanceof Array)) {
+          router.push(route.query.goto);
+        } else
+          router.push('/');
       } else
         dataBus.clear();
 
-      this.working = false;
+      data.working = false;
+    }
+
+    return {
+      ...toRefs(data),
+      valid,
+      register,
+      login
     }
   }
 });

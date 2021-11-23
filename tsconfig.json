@@ -2,7 +2,10 @@
   "compileOnSave": false,
   "compilerOptions": {
     "outDir": "./stage",
-    "baseUrl": "src/frontend",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/frontend/*"]
+    },
     "module": "es2020",
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
@@ -17,11 +20,10 @@
     ]
   },
   "include": [
-    "src/**/*.ts",
-    "src/**/*.vue",
+    "src/frontend/**/*.ts",
+    "src/frontend/**/*.vue",
   ],
   "exclude": [
-    "node_modules",
-    "src/backend"
+    "node_modules"
   ]
 }
